@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Buku Kas Saya</title>
+</head>
+<body>
+    <h1>Daftar Transaksi Buku Kas</h1>
+
+    <table border="1">
+        <tr>
+            <th>Tanggal</th>
+            <th>Jenis</th>
+            <th>Kategori</th>
+            <th>Nominal (Rp)</th>
+        </tr>
+        {% for transaksi in transaksis %}
+        <tr>
+            <td>{{ transaksi.tanggal }}</td>
+            <td>{{ transaksi.jenis_transaksi }}</td>
+            <td>{{ transaksi.kategori }}</td>
+            <td>{{ transaksi.nominal }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="4">Belum ada data transaksi.</td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>

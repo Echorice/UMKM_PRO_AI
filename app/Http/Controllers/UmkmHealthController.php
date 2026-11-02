@@ -22,38 +22,49 @@ class UmkmHealthController extends Controller
     $co = $request->cashOutflow ?? 0;
     $prevRev = $request->previousRevenue ?? 0;
 
-    // 2. Kalkulasi 7 Indikator Finansial
+    # 2. Kalkulasi Indikator Finansial yang Benar & Realistis
     $currentRatio = $cl > 0 ? ($ca / $cl) : 0;
     $der = $te > 0 ? ($td / $te) : 0;
+    
+    // ROA: Net Profit / Total Assets (Persentase wajar -50% s.d +100%)
     $roa = $ta > 0 ? (($np / $ta) * 100) : 0;
-    $npm = $sales > 0 ? (($np / $sales) * 100) : 0;
+    
+    // NPM: Net Profit / Sales (Persentase wajar -100% s.d +100%, jika sales kecil/nol di-handle)
+    $npm = ($sales > 0 && $np != 0) ? (($np / $sales) * 100) : 0;
+    if ($npm > 100) $npm = 100.0; // Batasi anomali max 100%
+    if ($npm < -100) $npm = -100.0;
+
+    // TAT: Sales / Total Assets (Rasio perputaran aset, wajar 0.1 s.d 10.0)
     $tat = $ta > 0 ? ($sales / $ta) : 0;
+    
     $ocf = $ci - $co;
     $revGrowth = $prevRev > 0 ? (($sales - $prevRev) / $prevRev) * 100 : 0;
 
-    // 3. MENGHUBUNGI SERVER DJANGO (MACHINE LEARNING)
+    // 3. MENGHUBUNGI SERVER FLASK (MACHINE LEARNING)
     $aiPrediction = 'Sehat (Default)';
 
     try {
-        $response = Http::timeout(5)->post('http://127.0.0.1:8001/predict/', [
-            'current_ratio' => (float) $currentRatio,
-            'der' => (float) $der,
-            'roa' => (float) $roa,
-            'npm' => (float) $npm,
-            'tat' => (float) $tat,
-            'ocf' => (float) $ocf,
-            'rev_growth' => (float) $revGrowth,
+        $response = Http::timeout(5)->post('http://127.0.0.1:5000/hitung-kesehatan', [
+            'namaUsaha' => $request->namaUsaha,
+            'currentAssets' => (float) $ca,
+            'currentLiabilities' => (float) $cl,
+            'totalDebt' => (float) $td,
+            'totalEquity' => (float) $te,
+            'netProfit' => (float) $np,
+            'totalAssets' => (float) $ta,
+            'sales' => (float) $sales,
+            'cashInflow' => (float) $ci,
+            'cashOutflow' => (float) $co,
+            'previousRevenue' => (float) $prevRev,
         ]);
 
         if ($response->successful()) {
             $apiData = $response->json();
-            $aiPrediction = $apiData['prediction'] ?? 'Sehat (Keuangan Stabil)';
+            $aiPrediction = $apiData['ai_prediction'] ?? 'Sehat (Keuangan Stabil)';
         } else {
-            // Jika Django mengembalikan error server (500/400)
             $aiPrediction = 'Error Server ML: ' . $response->status();
         }
     } catch (\Exception $e) {
-        // Jika gagal koneksi sama sekali (misal Django mati)
         $aiPrediction = 'Server ML Offline';
     }
 

@@ -21,6 +21,12 @@ use App\Http\Controllers\BukuKasController;
 // Rute Halaman Buku Kas (Menampilkan data)
 Route::get('/buku-kas', [BukuKasController::class, 'index']);
 
+// API Routes untuk Frontend (CRUD via fetch)
+Route::get('/api/transaksi', [BukuKasController::class, 'apiIndex']);
+Route::post('/api/transaksi', [BukuKasController::class, 'store']);
+Route::put('/api/transaksi/{id}', [BukuKasController::class, 'update']);
+Route::delete('/api/transaksi/{id}', [BukuKasController::class, 'destroy']);
+
 // Rute untuk Menyimpan Transaksi Buku Kas
 Route::post('/buku-kas', [BukuKasController::class, 'store']);
 

@@ -1,14 +1,35 @@
 import React, { useState, useEffect } from 'react';
 
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
+
+function showToast(message, type = 'error') {
+    const container = document.getElementById('toast-container') || (() => {
+        const div = document.createElement('div');
+        div.id = 'toast-container';
+        div.className = 'fixed top-4 right-4 z-50 flex flex-col gap-2';
+        document.body.appendChild(div);
+        return div;
+    })();
+
+    const toast = document.createElement('div');
+    toast.className = `px-4 py-3 rounded-xl shadow-lg text-white text-sm font-medium animate-slide-in ${
+        type === 'error' ? 'bg-rose-500' : type === 'success' ? 'bg-emerald-500' : 'bg-amber-500'
+    }`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+}
+
 export default function BukuKas() {
     const [transaksi, setTransaksi] = useState([]);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     // State untuk mode edit
     const [editId, setEditId] = useState(null);
 
     const [form, setForm] = useState({
-        tanggal: new Date().toISOString().split('T')[0],
+        tanggal: new Date().toLocaleDateString('sv-SE'),
         jenis_transaksi: 'Pemasukan',
         kategori: 'Penjualan',
         keterangan: '',
@@ -16,12 +37,20 @@ export default function BukuKas() {
     });
 
     const fetchTransaksi = async () => {
+        setLoading(true);
+        setError(null);
         try {
-            const response = await fetch('http://127.0.0.1:8001/api/transaksi/');
+            const response = await fetch(`${API_BASE}/transaksi/`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             setTransaksi(data);
-        } catch (error) {
-            console.error('Gagal mengambil data:', error);
+        } catch (err) {
+            const msg = 'Gagal memuat data transaksi';
+            console.error(msg, err);
+            setError(msg);
+            showToast(msg, 'error');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -98,7 +127,7 @@ export default function BukuKas() {
         setLoading(true);
         const cleanNominal = Number(form.nominal.toString().replace(/\./g, ''));
 
-        const url = editId ? `http://127.0.0.1:8001/api/transaksi/${editId}/` : 'http://127.0.0.1:8001/api/transaksi/';
+        const url = editId ? `${API_BASE}/transaksi/${editId}/` : `${API_BASE}/transaksi/`;
         const method = editId ? 'PUT' : 'POST';
 
         try {
@@ -118,11 +147,16 @@ export default function BukuKas() {
             });
 
             if (response.ok) {
+                showToast(editId ? 'Transaksi diperbarui' : 'Transaksi disimpan', 'success');
                 fetchTransaksi();
                 batalEdit();
+            } else {
+                throw new Error(`HTTP ${response.status}`);
             }
-        } catch (error) {
-            console.error('Fetch Error:', error);
+        } catch (err) {
+            const msg = editId ? 'Gagal memperbarui transaksi' : 'Gagal menyimpan transaksi';
+            console.error(msg, err);
+            showToast(msg, 'error');
         } finally {
             setLoading(false);
         }

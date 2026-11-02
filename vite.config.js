@@ -10,4 +10,10 @@ export default defineConfig({
         }),
         react(),
     ],
+    server: {
+        host: '127.0.0.1', // Menyelaraskan Vite ke IPv4 untuk mengatasi error [::1]
+        watch: {
+            usePolling: true,
+        },
+    },
 });

@@ -45,16 +45,6 @@ def api_detail_transaksi(request, pk):
 from .ml_model import analisis_kesehatan_keuangan
 
 @api_view(['GET'])
-def api_analisis_ml(request):
+def api_predict_ml(request):
     hasil_analisis = analisis_kesehatan_keuangan()
     return Response(hasil_analisis)
-
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from .ml_model import analisis_kesehatan_keuangan, prediksi_dari_metrics
-
-@api_view(['POST'])
-def api_predict_ml(request):
-    # Menerima data dari Laravel dan menjalankan Random Forest
-    hasil_prediksi = prediksi_dari_metrics(request.data)
-    return Response({"prediction": hasil_prediksi})

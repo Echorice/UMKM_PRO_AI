@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prediksi Keuangan UMKM</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; max-width: 400px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input { width: 100%; padding: 8px; box-sizing: border-box; }
+        button { padding: 10px 15px; background-color: #007BFF; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        #hasil { margin-top: 20px; font-weight: bold; color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+
+    <h2>Analisis Prediksi Keuangan</h2>
+
+    <!-- Formulir ini disesuaikan dengan fitur/kolom yang dipelajari model Anda -->
+    <div class="form-group">
+        <label for="omset">Omset Bulanan (Rp):</label>
+        <input type="number" id="omset" required>
+    </div>
+    <div class="form-group">
+        <label for="pengeluaran">Total Pengeluaran (Rp):</label>
+        <input type="number" id="pengeluaran" required>
+    </div>
+    <div class="form-group">
+        <label for="jumlah_transaksi">Jumlah Transaksi:</label>
+        <input type="number" id="jumlah_transaksi" required>
+    </div>
+
+    <button onclick="kirimData()">Prediksi Sekarang</button>
+
+    <div id="hasil"></div>
+
+    <script>
+        // Fungsi ini berjalan saat tombol diklik
+        async function kirimData() {
+            const hasilDiv = document.getElementById('hasil');
+            hasilDiv.innerHTML = "Memproses...";
+            hasilDiv.className = "";
+
+            // 1. Ambil nilai dari formulir
+            // Pastikan penamaan key JSON di bawah ini SAMA PERSIS dengan nama kolom dataset di Colab Anda
+            const dataInput = {
+                "omset": parseFloat(document.getElementById('omset').value),
+                "pengeluaran": parseFloat(document.getElementById('pengeluaran').value),
+                "jumlah_transaksi": parseFloat(document.getElementById('jumlah_transaksi').value)
+            };
+
+            try {
+                // 2. Kirim request POST ke API Flask lokal
+                const respon = await fetch('http://127.0.0.1:5000/prediksi', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dataInput)
+                });
+
+                const hasilJson = await respon.json();
+
+                // 3. Tampilkan hasil dari backend ke layar
+                if (hasilJson.status === 'sukses') {
+                    // Anda bisa menyesuaikan interpretasi hasil 0 dan 1 sesuai model klasifikasi Anda
+                    const kategori = hasilJson.hasil_prediksi === 1 ? "Sehat" : "Beresiko";
+                    hasilDiv.innerHTML = `Status Prediksi: ${kategori} (Kode: ${hasilJson.hasil_prediksi})`;
+                    hasilDiv.style.color = hasilJson.hasil_prediksi === 1 ? "green" : "red";
+                } else {
+                    hasilDiv.innerHTML = `Error dari server: ${hasilJson.pesan}`;
+                    hasilDiv.className = "error";
+                }
+
+            } catch (error) {
+                hasilDiv.innerHTML = `Gagal terhubung ke API: ${error.message}`;
+                hasilDiv.className = "error";
+            }
+        }
+    </script>
+</body>
+</html>

@@ -5,11 +5,10 @@ use Inertia\Inertia;
 use App\Http\Controllers\UmkmHealthController;
 use App\Models\UmkmHealth;
 
-// 1. Rute Halaman Utama (Home / Analisis AI)
+// 1. Rute Halaman Utama (Home / Dashboard / Analisis AI)
 Route::get('/', function () {
-    $latestData = UmkmHealth::latest()->first();
     return Inertia::render('Home', [
-        'latestData' => $latestData
+        'activeTab' => 'dashboard'
     ]);
 });
 
@@ -30,7 +29,16 @@ Route::delete('/api/transaksi/{id}', [BukuKasController::class, 'destroy']);
 // Rute untuk Menyimpan Transaksi Buku Kas
 Route::post('/buku-kas', [BukuKasController::class, 'store']);
 
+// API Routes untuk Frontend (CRUD via fetch)
+Route::get('/api/transaksi', [BukuKasController::class, 'apiIndex']);
+Route::post('/api/transaksi', [BukuKasController::class, 'apiStore']);
+Route::put('/api/transaksi/{id}', [BukuKasController::class, 'apiUpdate']);
+Route::delete('/api/transaksi/{id}', [BukuKasController::class, 'apiDestroy']);
+Route::get('/api/dashboard-performance', [BukuKasController::class, 'apiPerformanceDashboard']);
+
 
 Route::get('/analisis-ai', function () {
-    return Inertia::render('AnalisisAI'); // Mengarah ke resources/js/Pages/AnalisisAI.jsx
+    return Inertia::render('Home', [
+        'activeTab' => 'analisisAI'
+    ]);
 });

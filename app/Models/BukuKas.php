@@ -14,8 +14,7 @@ class BukuKas extends Model
         'tanggal',
         'keterangan',
         'jenis',
-        'jenis_transaksi',
-        'kategori',
-        'nominal'
+        'nominal',
+        'kategori'
     ];
 }

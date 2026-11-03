@@ -1,33 +1,20 @@
-import React from 'react';
+import './bootstrap';
+import '../css/app.css';
+
 import { createRoot } from 'react-dom/client';
-import Home from './Pages/Home';
-import BukuKas from './Pages/BukuKas';
-import DashboardLayout from './Layouts/DashboardLayout';
+import { createInertiaApp } from '@inertiajs/react';
+import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 
-function AppRouter() {
-    const path = window.location.pathname;
+const appName = window.document.getElementsByTagName('title')[0]?.innerText || 'UMKMPro';
 
-    let CurrentPage = Home;
-    if (path.includes('/buku-kas')) {
-        CurrentPage = BukuKas;
-    }
-
-    const el = document.getElementById('app');
-    const pageData = el && el.dataset.page ? JSON.parse(el.dataset.page) : {};
-    const props = pageData.props || {};
-
-    return (
-        <DashboardLayout>
-            <CurrentPage {...props} />
-        </DashboardLayout>
-    );
-}
-
-const container = document.getElementById('app');
-if (container) {
-    // Menyimpan root di dalam properti DOM agar tidak terpanggil ganda
-    if (!container._reactRoot) {
-        container._reactRoot = createRoot(container);
-    }
-    container._reactRoot.render(<AppRouter />);
-}
+createInertiaApp({
+    title: (title) => `${title} - ${appName}`,
+    resolve: (name) => resolvePageComponent(`./Pages/${name}.jsx`, import.meta.glob('./Pages/**/*.jsx')),
+    setup({ el, App, props }) {
+        const root = createRoot(el);
+        root.render(<App {...props} />);
+    },
+    progress: {
+        color: '#4B5563',
+    },
+});

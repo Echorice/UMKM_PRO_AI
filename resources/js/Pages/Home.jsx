@@ -4,6 +4,7 @@ import DashboardLayout from '@/Layouts/DashboardLayout';
 import DashboardView from '@/Components/Views/Dashboard';
 import AnalisisAI from '@/Components/Views/AnalisisAI';
 import BukuKas from '@/Components/Views/BukuKas';
+import ManajemenStok from '@/Components/Views/ManajemenStok';
 
 export default function Home() {
     const { props } = usePage();
@@ -16,6 +17,7 @@ export default function Home() {
                     {activeTab === 'dashboard' && <DashboardView />}
                     {activeTab === 'analisisAI' && <AnalisisAI />}
                     {activeTab === 'bukuKas' && <BukuKas />}
+                    {activeTab === 'manajemenStok' && <ManajemenStok />}
                 </div>
             </div>
         </DashboardLayout>

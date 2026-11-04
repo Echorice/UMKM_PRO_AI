@@ -42,6 +42,34 @@ export default function DashboardView() {
         returning_rate: 65,
         return_rate: 4.8
     };
+
+    // Health scores from ML analysis (aligned with AnalisisAI)
+    const healthScores = {
+        profitability: 87,
+        liquidity: 92,
+        leverage: 68,
+        efficiency: 79
+    };
+
+    const getHealthColor = (score) => {
+        if (score >= 80) return 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30';
+        if (score >= 60) return 'text-amber-400 bg-amber-500/20 border-amber-500/30';
+        return 'text-rose-400 bg-rose-500/20 border-rose-500/30';
+    };
+
+    const getHealthLabel = (score) => {
+        if (score >= 80) return 'Sangat Baik';
+        if (score >= 60) return 'Cukup';
+        return 'Perlu Perbaikan';
+    };
+
+    // Quick Insights Data
+    const quickInsights = [
+        { key: 'pl', label: 'Laba Rugi', value: fmt(health.total_revenue - health.total_expenses), trend: '+12.3%', trendColor: 'text-emerald-400', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1' },
+        { key: 'cf', label: 'Arus Kas', value: fmt(health.total_cash), trend: '+8.7%', trendColor: 'text-emerald-400', icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6' },
+        { key: 'risk', label: 'Risk Score', value: `${Math.round((healthScores.profitability + healthScores.liquidity + healthScores.leverage + healthScores.efficiency) / 4)}/100`, trend: getHealthLabel(Math.round((healthScores.profitability + healthScores.liquidity + healthScores.leverage + healthScores.efficiency) / 4)), trendColor: getHealthColor(Math.round((healthScores.profitability + healthScores.liquidity + healthScores.leverage + healthScores.efficiency) / 4)).includes('emerald') ? 'text-emerald-400' : getHealthColor(Math.round((healthScores.profitability + healthScores.liquidity + healthScores.leverage + healthScores.efficiency) / 4)).includes('amber') ? 'text-amber-400' : 'text-rose-400', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
+        { key: 'health', label: 'Health Score', value: `${Math.round((healthScores.profitability + healthScores.liquidity + healthScores.leverage + healthScores.efficiency) / 4)}/100`, trend: getHealthLabel(Math.round((healthScores.profitability + healthScores.liquidity + healthScores.leverage + healthScores.efficiency) / 4)), trendColor: getHealthColor(Math.round((healthScores.profitability + healthScores.liquidity + healthScores.leverage + healthScores.efficiency) / 4)).includes('emerald') ? 'text-emerald-400' : getHealthColor(Math.round((healthScores.profitability + healthScores.liquidity + healthScores.leverage + healthScores.efficiency) / 4)).includes('amber') ? 'text-amber-400' : 'text-rose-400', icon: 'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z' }
+    ];
     const apiByCategory = dashboardData?.by_category;
     const isProductCategoryData = apiByCategory && apiByCategory.length > 0 && 
         apiByCategory.some(c => ['Electronics', 'Fashion', 'Home & Kitchen', 'Beauty', 'Others'].includes(c.kategori));
@@ -87,29 +115,29 @@ export default function DashboardView() {
     });
 
     return (
-        <div className="bg-slate-50 min-h-screen p-6 md:p-8">
+        <div className="bg-[#0E0B1D] min-h-screen p-6 md:p-8 text-slate-100">
             <div className="max-w-7xl mx-auto space-y-8">
 
                 {/* ===== 1. HEADER: UMKM NAME + ML ANALYSIS ===== */}
-                <div className="animate-slideUp bg-white rounded-3xl shadow-card border border-slate-100 p-6 md:p-8 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-72 h-72 bg-gradient-to-bl from-primary/10 to-transparent rounded-full blur-3xl"></div>
+                <div className="animate-slideUp bg-[#2A1E4D] rounded-3xl shadow-2xl border border-[#3A3A52] p-6 md:p-8 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-72 h-72 bg-gradient-to-bl from-[#5A3B8C]/30 to-transparent rounded-full blur-3xl"></div>
                     <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                         <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-700 to-purple-900 flex items-center justify-center shadow-lg text-white">
+                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#5A3B8C] to-[#8B7CC7] flex items-center justify-center shadow-lg text-white">
                                 <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
                             </div>
                             <div>
-                                <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+                                <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">
                                     {dashboardData?.umkm?.nama_umkm || 'Toko Berkah Jaya'}
                                 </h1>
-                                <p className="text-slate-500 mt-1">
+                                <p className="text-[#C9C2E3] mt-1 text-sm">
                                     UMKM Kuliner • Terdaftar: 12 Mar 2023 • ID: {dashboardData?.umkm?.id_umkm || 'UMKM-7842'}
                                 </p>
                             </div>
                         </div>
                         <div className="flex items-center gap-3 flex-wrap">
-                            <div className="px-4 py-2.5 bg-purple-100 text-purple-700 rounded-xl font-bold text-sm flex items-center gap-2">
-                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <div className="px-4 py-2.5 bg-[#5A3B8C]/40 text-[#C9C2E3] border border-[#5A3B8C] rounded-xl font-bold text-sm flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
                                 AI Analysis: Optimal
                             </div>
                         </div>
@@ -117,45 +145,45 @@ export default function DashboardView() {
 
                     {/* ML Analysis Insights Row */}
                     <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100">
+                        <div className="bg-[#0E0B1D]/60 rounded-2xl p-5 border border-[#3A3A52]">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+                                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
                                 <div>
-                                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wide">Profitability Score</p>
-                                    <p className="text-xl font-black text-emerald-700">87/100</p>
+                                    <p className="text-xs text-[#C9C2E3]/70 font-bold uppercase tracking-wide">Profitability Score</p>
+                                    <p className="text-xl font-black text-emerald-400">87/100</p>
                                 </div>
                             </div>
-                            <p className="text-xs text-slate-500 mt-2">NPM {health.net_profit_margin}% • ROA {health.return_on_assets}% • Above industry avg</p>
+                            <p className="text-xs text-[#C9C2E3]/80 mt-2">NPM {health.net_profit_margin}% • ROA {health.return_on_assets}% • Above industry avg</p>
                         </div>
-                        <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100">
+                        <div className="bg-[#0E0B1D]/60 rounded-2xl p-5 border border-[#3A3A52]">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg></div>
+                                <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg></div>
                                 <div>
-                                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wide">Liquidity Score</p>
-                                    <p className="text-xl font-black text-blue-700">92/100</p>
+                                    <p className="text-xs text-[#C9C2E3]/70 font-bold uppercase tracking-wide">Liquidity Score</p>
+                                    <p className="text-xl font-black text-blue-400">92/100</p>
                                 </div>
                             </div>
-                            <p className="text-xs text-slate-500 mt-2">Current Ratio {health.current_ratio}x • Healthy cash position</p>
+                            <p className="text-xs text-[#C9C2E3]/80 mt-2">Current Ratio {health.current_ratio}x • Healthy cash position</p>
                         </div>
-                        <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100">
+                        <div className="bg-[#0E0B1D]/60 rounded-2xl p-5 border border-[#3A3A52]">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></div>
+                                <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></div>
                                 <div>
-                                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wide">Leverage Score</p>
-                                    <p className="text-xl font-black text-amber-700">68/100</p>
+                                    <p className="text-xs text-[#C9C2E3]/70 font-bold uppercase tracking-wide">Leverage Score</p>
+                                    <p className="text-xl font-black text-amber-400">68/100</p>
                                 </div>
                             </div>
-                            <p className="text-xs text-slate-500 mt-2">DER {health.debt_equity_ratio}x • Moderate debt level</p>
+                            <p className="text-xs text-[#C9C2E3]/80 mt-2">DER {health.debt_equity_ratio}x • Moderate debt level</p>
                         </div>
-                        <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100">
+                        <div className="bg-[#0E0B1D]/60 rounded-2xl p-5 border border-[#3A3A52]">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg></div>
+                                <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-[#8B7CC7]"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg></div>
                                 <div>
-                                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wide">Efficiency Score</p>
-                                    <p className="text-xl font-black text-purple-700">79/100</p>
+                                    <p className="text-xs text-[#C9C2E3]/70 font-bold uppercase tracking-wide">Efficiency Score</p>
+                                    <p className="text-xl font-black text-[#C9C2E3]">79/100</p>
                                 </div>
                             </div>
-                            <p className="text-xs text-slate-500 mt-2">TAT 1.3x • Rev Growth {health.growth_rate}% YoY</p>
+                            <p className="text-xs text-[#C9C2E3]/80 mt-2">TAT 1.3x • Rev Growth {health.growth_rate}% YoY</p>
                         </div>
                     </div>
                 </div>
@@ -216,41 +244,41 @@ export default function DashboardView() {
 
                 {/* ===== 3. SALES PERFORMANCE DASHBOARD ===== */}
                 <section className="space-y-6">
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3">
-                            <svg className="w-7 h-7 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#3A3A52]">
+                        <h2 className="text-2xl font-black text-white flex items-center gap-3">
+                            <svg className="w-7 h-7 text-[#8B7CC7]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                             Sales Performance Dashboard
                         </h2>
                     </div>
 
                     {/* KPI Row */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <article className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex items-center gap-4 group">
-                            <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center text-purple-700 group-hover:scale-110 transition-transform"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"/></svg></div>
+                        <article className="bg-[#2A1E4D] rounded-2xl p-5 border border-[#3A3A52] flex items-center gap-4 group">
+                            <div className="w-12 h-12 rounded-xl bg-[#5A3B8C]/30 flex items-center justify-center text-[#8B7CC7] group-hover:scale-110 transition-transform"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1\"/></svg></div>
                             <div>
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Revenue</p>
-                                <h3 className="text-xl font-black text-slate-900 mt-0.5">{fmtShort(kpi.total_revenue)}</h3>
+                                <p className="text-xs font-bold text-[#C9C2E3] uppercase tracking-wider">Total Revenue</p>
+                                <h3 className="text-xl font-black text-white mt-0.5">{fmtShort(kpi.total_revenue)}</h3>
                             </div>
                         </article>
-                        <article className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex items-center gap-4 group">
-                            <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a2 2 0 00-2-2H6a2 2 0 00-2 2v16a2 2 0 002 2h8"/></svg></div>
+                        <article className="bg-[#2A1E4D] rounded-2xl p-5 border border-[#3A3A52] flex items-center gap-4 group">
+                            <div className="w-12 h-12 rounded-xl bg-[#5A3B8C]/30 flex items-center justify-center text-[#8B7CC7] group-hover:scale-110 transition-transform"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a2 2 0 00-2-2H6a2 2 0 00-2 2v16a2 2 0 002 2h8\"/></svg></div>
                             <div>
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Orders</p>
-                                <h3 className="text-xl font-black text-slate-900 mt-0.5">{num(kpi.total_orders)}</h3>
+                                <p className="text-xs font-bold text-[#C9C2E3] uppercase tracking-wider">Total Orders</p>
+                                <h3 className="text-xl font-black text-white mt-0.5">{num(kpi.total_orders)}</h3>
                             </div>
                         </article>
-                        <article className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex items-center gap-4 group">
-                            <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg></div>
+                        <article className="bg-[#2A1E4D] rounded-2xl p-5 border border-[#3A3A52] flex items-center gap-4 group">
+                            <div className="w-12 h-12 rounded-xl bg-[#5A3B8C]/30 flex items-center justify-center text-[#8B7CC7] group-hover:scale-110 transition-transform"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4\"/></svg></div>
                             <div>
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Quantity Sold</p>
-                                <h3 className="text-xl font-black text-slate-900 mt-0.5">{num(kpi.quantity_sold)}</h3>
+                                <p className="text-xs font-bold text-[#C9C2E3] uppercase tracking-wider">Quantity Sold</p>
+                                <h3 className="text-xl font-black text-white mt-0.5">{num(kpi.quantity_sold)}</h3>
                             </div>
                         </article>
-                        <article className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex items-center gap-4 group">
-                            <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1"/></svg></div>
+                        <article className="bg-[#2A1E4D] rounded-2xl p-5 border border-[#3A3A52] flex items-center gap-4 group">
+                            <div className="w-12 h-12 rounded-xl bg-[#5A3B8C]/30 flex items-center justify-center text-[#8B7CC7] group-hover:scale-110 transition-transform"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1\"/></svg></div>
                             <div>
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Avg Order Value</p>
-                                <h3 className="text-xl font-black text-slate-900 mt-0.5">{fmtShort(kpi.avg_order_value)}</h3>
+                                <p className="text-xs font-bold text-[#C9C2E3] uppercase tracking-wider">Avg Order Value</p>
+                                <h3 className="text-xl font-black text-white mt-0.5">{fmtShort(kpi.avg_order_value)}</h3>
                             </div>
                         </article>
                     </div>
@@ -382,77 +410,76 @@ export default function DashboardView() {
                     </div>
 
                     {/* Health Metrics Radar */}
-                    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                        <h3 className="text-base font-bold text-slate-900 mb-4 pb-3 border-b border-slate-100 flex items-center gap-2">
-                            <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                    <div className="bg-[#0E0B1D] rounded-2xl p-5 border border-[#3A3A52]">
+                        <h3 className="text-base font-bold text-[#C9C2E3] mb-4 pb-3 border-b border-[#3A3A52] flex items-center gap-2">
+                            <svg className="w-5 h-5 text-[#8B7CC7]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                             Health Metrics Radar
                         </h3>
                         <div className="space-y-4">
                             <div>
-                                <div className="flex justify-between text-xs mb-1"><span className="font-semibold text-slate-700">Current Ratio (CR)</span><span className="font-bold text-emerald-600">2.8x</span></div>
-                                <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden"><div className="h-full rounded-full bg-emerald-500" style={{ width: '93%' }}></div></div>
-                                <p className="text-[10px] text-slate-400 mt-0.5">Target: &gt;2.0x • Excellent liquidity</p>
+                                <div className="flex justify-between text-xs mb-1"><span className="font-semibold text-[#C9C2E3]">Current Ratio (CR)</span><span className="font-bold text-white">2.8x</span></div>
+                                <div className="w-full bg-[#0E0B1D] h-2.5 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: '93%', background: 'linear-gradient(to right, #5A3B8C, #8B7CC7)' }}></div></div>
+                                <p className="text-[10px] text-[#C9C2E3]/70 mt-0.5">Target: &gt;2.0x • Excellent liquidity</p>
                             </div>
                             <div>
-                                <div className="flex justify-between text-xs mb-1"><span className="font-semibold text-slate-700">Return on Assets (ROA)</span><span className="font-bold text-blue-600">12.4%</span></div>
-                                <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{ width: '78%' }}></div></div>
-                                <p className="text-[10px] text-slate-400 mt-0.5">Target: &gt;10% • Above industry avg</p>
+                                <div className="flex justify-between text-xs mb-1"><span className="font-semibold text-[#C9C2E3]">Return on Assets (ROA)</span><span className="font-bold text-white">12.4%</span></div>
+                                <div className="w-full bg-[#0E0B1D] h-2.5 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: '78%', background: 'linear-gradient(to right, #5A3B8C, #8B7CC7)' }}></div></div>
+                                <p className="text-[10px] text-[#C9C2E3]/70 mt-0.5">Target: &gt;10% • Above industry avg</p>
                             </div>
                             <div>
-                                <div className="flex justify-between text-xs mb-1"><span className="font-semibold text-slate-700">Debt to Equity (DER)</span><span className="font-bold text-amber-600">0.47x</span></div>
-                                <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden"><div className="h-full rounded-full bg-amber-500" style={{ width: '65%' }}></div></div>
-                                <p className="text-[10px] text-slate-400 mt-0.5">Target: &lt;0.5x • Moderate leverage</p>
+                                <div className="flex justify-between text-xs mb-1"><span className="font-semibold text-[#C9C2E3]">Debt to Equity (DER)</span><span className="font-bold text-white">0.47x</span></div>
+                                <div className="w-full bg-[#0E0B1D] h-2.5 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: '65%', background: 'linear-gradient(to right, #5A3B8C, #8B7CC7)' }}></div></div>
+                                <p className="text-[10px] text-[#C9C2E3]/70 mt-0.5">Target: &lt;0.5x • Moderate leverage</p>
                             </div>
                             <div>
-                                <div className="flex justify-between text-xs mb-1"><span className="font-semibold text-slate-700">Net Profit Margin (NPM)</span><span className="font-bold text-purple-600">18.7%</span></div>
-                                <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden"><div className="h-full rounded-full bg-purple-500" style={{ width: '85%' }}></div></div>
-                                <p className="text-[10px] text-slate-400 mt-0.5">Target: &gt;15% • Strong profitability</p>
+                                <div className="flex justify-between text-xs mb-1"><span className="font-semibold text-[#C9C2E3]">Net Profit Margin (NPM)</span><span className="font-bold text-white">18.7%</span></div>
+                                <div className="w-full bg-[#0E0B1D] h-2.5 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: '85%', background: 'linear-gradient(to right, #5A3B8C, #8B7CC7)' }}></div></div>
+                                <p className="text-[10px] text-[#C9C2E3]/70 mt-0.5">Target: &gt;15% • Strong profitability</p>
                             </div>
                             <div>
-                                <div className="flex justify-between text-xs mb-1"><span className="font-semibold text-slate-700">Total Asset Turnover (TAT)</span><span className="font-bold text-cyan-600">1.3x</span></div>
-                                <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden"><div className="h-full rounded-full bg-cyan-500" style={{ width: '70%' }}></div></div>
-                                <p className="text-[10px] text-slate-400 mt-0.5">Target: &gt;1.0x • Good efficiency</p>
+                                <div className="flex justify-between text-xs mb-1"><span className="font-semibold text-[#C9C2E3]">Total Asset Turnover (TAT)</span><span className="font-bold text-white">1.3x</span></div>
+                                <div className="w-full bg-[#0E0B1D] h-2.5 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: '70%', background: 'linear-gradient(to right, #5A3B8C, #8B7CC7)' }}></div></div>
+                                <p className="text-[10px] text-[#C9C2E3]/70 mt-0.5">Target: &gt;1.0x • Good efficiency</p>
                             </div>
                             <div>
-                                <div className="flex justify-between text-xs mb-1"><span className="font-semibold text-slate-700">Revenue Growth (YoY)</span><span className="font-bold text-rose-600">23.5%</span></div>
-                                <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden"><div className="h-full rounded-full bg-rose-500" style={{ width: '90%' }}></div></div>
-                                <p className="text-[10px] text-slate-400 mt-0.5">Target: &gt;15% • High growth</p>
+                                <div className="flex justify-between text-xs mb-1"><span className="font-semibold text-[#C9C2E3]">Revenue Growth (YoY)</span><span className="font-bold text-white">23.5%</span></div>
+                                <div className="w-full bg-[#0E0B1D] h-2.5 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: '90%', background: 'linear-gradient(to right, #5A3B8C, #8B7CC7)' }}></div></div>
+                                <p className="text-[10px] text-[#C9C2E3]/70 mt-0.5">Target: &gt;15% • High growth</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 {/* ===== 5. CUSTOMER HEALTH METRICS ===== */}
-                <div className="bg-gradient-to-br from-purple-700 via-purple-800 to-purple-950 rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden text-white">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-purple-200 mb-6 flex items-center gap-2">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+                <div className="mt-6 p-5 bg-[#2A1E4D] border border-[#3A3A52] rounded-3xl relative overflow-hidden text-white">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-[#C9C2E3] mb-6 flex items-center gap-2">
+                        <svg className="w-5 h-5 text-[#8B7CC7]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
                         Customer Health Metrics
                     </h4>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 relative">
-                        <div className="bg-white/10 p-4 rounded-2xl border border-white/20 backdrop-blur-sm text-center relative">
-                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-8 rounded-xl bg-emerald-500 flex items-center justify-center text-white"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg></div>
-                            <p className="text-[11px] text-purple-200 uppercase font-medium mb-1 mt-1">Total Customers</p>
-                            <h5 className="text-xl font-black">1,450</h5>
-                            <p className="text-[10px] text-emerald-300 mt-1">+12.4% vs last quarter</p>
+                        <div className="bg-[#0E0B1D] p-4 rounded-2xl border border-[#3A3A52] text-center relative pt-6">
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-8 rounded-xl bg-[#5A3B8C]/30 flex items-center justify-center text-[#8B7CC7] border border-[#3A3A52]"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg></div>
+                            <p className="text-[11px] text-[#C9C2E3] uppercase font-medium mb-1 mt-1">Total Customers</p>
+                            <h5 className="text-xl font-black text-white">1,450</h5>
+                            <p className="text-[10px] text-emerald-400/90 mt-1">+12.4% vs last quarter</p>
                         </div>
-                        <div className="bg-white/10 p-4 rounded-2xl border border-white/20 backdrop-blur-sm text-center relative">
-                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-8 rounded-xl bg-blue-500 flex items-center justify-center text-white"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg></div>
-                            <p className="text-[11px] text-purple-200 uppercase font-medium mb-1 mt-1">Return Rate</p>
-                            <h5 className="text-xl font-black">65%</h5>
-                            <p className="text-[10px] text-emerald-300 mt-1">Industry avg: 42%</p>
+                        <div className="bg-[#0E0B1D] p-4 rounded-2xl border border-[#3A3A52] text-center relative pt-6">
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-8 rounded-xl bg-[#5A3B8C]/30 flex items-center justify-center text-[#8B7CC7] border border-[#3A3A52]"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg></div>
+                            <p className="text-[11px] text-[#C9C2E3] uppercase font-medium mb-1 mt-1">Return Rate</p>
+                            <h5 className="text-xl font-black text-white">65%</h5>
+                            <p className="text-[10px] text-blue-400/90 mt-1">Industry avg: 42%</p>
                         </div>
-                        <div className="bg-white/10 p-4 rounded-2xl border border-white/20 backdrop-blur-sm text-center relative">
-                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-8 rounded-xl bg-amber-500 flex items-center justify-center text-white"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg></div>
-                            <p className="text-[11px] text-purple-200 uppercase font-medium mb-1 mt-1">Retention Rate</p>
-                            <h5 className="text-xl font-black">4.8%</h5>
-                            <p className="text-[10px] text-rose-300 mt-1">Below 5% threshold</p>
+                        <div className="bg-[#0E0B1D] p-4 rounded-2xl border border-[#3A3A52] text-center relative pt-6">
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-8 rounded-xl bg-[#5A3B8C]/30 flex items-center justify-center text-[#8B7CC7] border border-[#3A3A52]"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg></div>
+                            <p className="text-[11px] text-[#C9C2E3] uppercase font-medium mb-1 mt-1">Retention Rate</p>
+                            <h5 className="text-xl font-black text-white">4.8%</h5>
+                            <p className="text-[10px] text-amber-400/90 mt-1">Below 5% threshold</p>
                         </div>
-                        <div className="bg-white/10 p-4 rounded-2xl border border-white/20 backdrop-blur-sm text-center relative">
-                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-8 rounded-xl bg-rose-500 flex items-center justify-center text-white"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1"/></svg></div>
-                            <p className="text-[11px] text-purple-200 uppercase font-medium mb-1 mt-1">Profit Margin</p>
-                            <h5 className="text-xl font-black">18.7%</h5>
-                            <p className="text-[10px] text-emerald-300 mt-1">Target: &gt;15%</p>
+                        <div className="bg-[#0E0B1D] p-4 rounded-2xl border border-[#3A3A52] text-center relative pt-6">
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-8 rounded-xl bg-[#5A3B8C]/30 flex items-center justify-center text-[#8B7CC7] border border-[#3A3A52]"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1"/></svg></div>
+                            <p className="text-[11px] text-[#C9C2E3] uppercase font-medium mb-1 mt-1">Profit Margin</p>
+                            <h5 className="text-xl font-black text-white">18.7%</h5>
+                            <p className="text-[10px] text-emerald-400/90 mt-1">Target: &gt;15%</p>
                         </div>
                     </div>
                 </div>

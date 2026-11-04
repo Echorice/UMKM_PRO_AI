@@ -13,6 +13,7 @@ Route::get('/', function () {
 });
 
 Route::post('/hitung-kesehatan', [UmkmHealthController::class, 'store']);
+Route::post('/api/analisis-ml', [UmkmHealthController::class, 'store']);
 
 // 2. Rute Halaman Buku Kas
 use App\Http\Controllers\BukuKasController;
@@ -40,5 +41,23 @@ Route::get('/api/dashboard-performance', [BukuKasController::class, 'apiPerforma
 Route::get('/analisis-ai', function () {
     return Inertia::render('Home', [
         'activeTab' => 'analisisAI'
+    ]);
+});
+
+// 3. Rute Manajemen Stok
+use App\Http\Controllers\StockController;
+Route::prefix('api/stock')->group(function () {
+    Route::get('/', [StockController::class, 'index']);
+    Route::post('/', [StockController::class, 'store']);
+    Route::put('/{id}', [StockController::class, 'update']);
+    Route::delete('/{id}', [StockController::class, 'destroy']);
+    Route::post('/kurangi', [StockController::class, 'kurangiStok']);
+    Route::post('/tambah', [StockController::class, 'tambahStok']);
+    Route::get('/low-stock', [StockController::class, 'getLowStock']);
+});
+
+Route::get('/manajemen-stok', function () {
+    return Inertia::render('Home', [
+        'activeTab' => 'manajemenStok'
     ]);
 });

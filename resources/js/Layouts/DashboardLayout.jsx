@@ -23,13 +23,13 @@ export default function DashboardLayout({ children }) {
     };
 
     return (
-        <div className="flex min-h-screen bg-slate-50">
+        <div className="flex min-h-screen bg-[#0E0B1D] text-slate-100">
             {/* SIDEBAR */}
-            <aside className="w-64 bg-purple-900 text-white flex flex-col justify-between p-6 shadow-xl">
+            <aside className="w-64 bg-[#2A1E4D] text-white flex flex-col justify-between p-6 shadow-2xl border-r border-[#3A3A52]">
                 <div>
                     <div className="mb-10">
-                        <h1 className="text-2xl font-black tracking-wider text-purple-100">UMKMPro</h1>
-                        <p className="text-xs text-purple-300 mt-1">Smart Financial AI</p>
+                        <h1 className="text-2xl font-black tracking-wider text-[#C9C2E3]">UMKMPro</h1>
+                        <p className="text-xs text-[#8B7CC7] mt-1 font-medium">Smart Financial AI</p>
                     </div>
 
                     <nav className="space-y-2">
@@ -37,8 +37,8 @@ export default function DashboardLayout({ children }) {
                             href="/"
                             className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${
                                 currentPath === '/'
-                                    ? 'bg-purple-600 text-white shadow-md'
-                                    : 'text-purple-200 hover:bg-purple-800'
+                                    ? 'bg-gradient-to-r from-[#5A3B8C] to-[#8B7CC7] text-white shadow-lg'
+                                    : 'text-[#C9C2E3] hover:bg-[#5A3B8C]/40 hover:text-white'
                             }`}
                         >
                             {icons.dashboard} Dashboard Utama
@@ -48,8 +48,8 @@ export default function DashboardLayout({ children }) {
                             href="/analisis-ai"
                             className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${
                                 currentPath === '/analisis-ai'
-                                    ? 'bg-purple-600 text-white shadow-md'
-                                    : 'text-purple-200 hover:bg-purple-800'
+                                    ? 'bg-gradient-to-r from-[#5A3B8C] to-[#8B7CC7] text-white shadow-lg'
+                                    : 'text-[#C9C2E3] hover:bg-[#5A3B8C]/40 hover:text-white'
                             }`}
                         >
                             {icons.analysis} Analisis AI
@@ -59,22 +59,36 @@ export default function DashboardLayout({ children }) {
                             href="/buku-kas"
                             className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${
                                 currentPath === '/buku-kas'
-                                    ? 'bg-purple-600 text-white shadow-md'
-                                    : 'text-purple-200 hover:bg-purple-800'
+                                    ? 'bg-gradient-to-r from-[#5A3B8C] to-[#8B7CC7] text-white shadow-lg'
+                                    : 'text-[#C9C2E3] hover:bg-[#5A3B8C]/40 hover:text-white'
                             }`}
                         >
                             {icons.cashbook} Buku Kas Harian
                         </a>
+
+                        <a
+                            href="/manajemen-stok"
+                            className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${
+                                currentPath === '/manajemen-stok'
+                                    ? 'bg-gradient-to-r from-[#5A3B8C] to-[#8B7CC7] text-white shadow-lg'
+                                    : 'text-[#C9C2E3] hover:bg-[#5A3B8C]/40 hover:text-white'
+                            }`}
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                            </svg>
+                            Manajemen Stok
+                        </a>
                     </nav>
                 </div>
 
-                <div className="text-xs text-purple-400 text-center border-t border-purple-800 pt-4">
+                <div className="text-xs text-[#8B7CC7] text-center border-t border-[#3A3A52] pt-4">
                     © 2026 UMKM Pro
                 </div>
             </aside>
 
             {/* KONTEN UTAMA */}
-            <main className="flex-1 overflow-y-auto">
+            <main className="flex-1 overflow-y-auto bg-[#0E0B1D]">
                 {children}
             </main>
         </div>

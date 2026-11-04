@@ -32,6 +32,12 @@ export default function BukuKasView() {
     const [bonEditId, setBonEditId] = useState(null);
     const [showBonModal, setShowBonModal] = useState(false);
 
+    // Filter & Reporting State
+    const [periodeFilter, setPeriodeFilter] = useState('semua');
+    const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
+    const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
+    const [showReportModal, setShowReportModal] = useState(null); // 'pl' | 'cashflow' | 'print'
+
     const [form, setForm] = useState({
         tanggal: new Date().toISOString().split('T')[0],
         jenis_transaksi: 'Pemasukan',
@@ -76,6 +82,69 @@ export default function BukuKasView() {
         } finally {
             setLoading(false);
         }
+    };
+
+    // Filter & Report state
+    const [reportData, setReportData] = useState(null);
+
+    const getFilteredTransaksi = React.useMemo(() => {
+        if (!transaksi || transaksi.length === 0) return [];
+        const today = new Date();
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+        const weekStart = new Date(today);
+        weekStart.setDate(today.getDate() - today.getDay());
+        weekStart.setHours(0, 0, 0, 0);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        weekEnd.setHours(23, 59, 59, 999);
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
+
+        return transaksi.filter((t) => {
+            const tgl = new Date(t.tanggal);
+            if (isNaN(tgl.getTime())) return false;
+            if (periodeFilter === 'hari_ini') return tgl >= todayStart && tgl <= todayEnd;
+            if (periodeFilter === 'minggu_ini') return tgl >= weekStart && tgl <= weekEnd;
+            if (periodeFilter === 'bulan_ini') return tgl >= monthStart && tgl <= monthEnd;
+            if (periodeFilter === 'custom') {
+                const start = new Date(customStart);
+                const end = new Date(customEnd);
+                end.setHours(23, 59, 59, 999);
+                return tgl >= start && tgl <= end;
+            }
+            return true;
+        });
+    }, [transaksi, periodeFilter, customStart, customEnd]);
+
+    const handleExportExcel = () => {
+        try {
+            let csvContent = "data:text/csv;charset=utf-8,Tanggal,Sumber,Keterangan,Jenis,Nominal,Kategori\r\n";
+            getFilteredTransaksi.forEach((t) => {
+                const row = [t.tanggal, t.sumber_kas || 'KAS_TUNAI', `"${t.keterangan || ''}"`, t.jenis_transaksi, t.nominal, t.kategori].join(",");
+                csvContent += row + "\r\n";
+            });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `laporan-buku-kas-${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            showToast('Export data ke CSV/Excel berhasil', 'success');
+        } catch (err) {
+            console.error('Export error:', err);
+            showToast('Gagal export data', 'error');
+        }
+    };
+
+    const handleOpenReport = (type) => {
+        const filtered = getFilteredTransaksi;
+        const totalPemasukan = filtered.filter(t => t.jenis_transaksi === 'Pemasukan').reduce((sum, t) => sum + parseFloat(String(t.nominal).replace(/\\D/g, '') || 0), 0);
+        const totalPengeluaran = filtered.filter(t => t.jenis_transaksi === 'Pengeluaran').reduce((sum, t) => sum + parseFloat(String(t.nominal).replace(/\\D/g, '') || 0), 0);
+        const totalSaldo = totalPemasukan - totalPengeluaran;
+        setReportData({ type, totalPemasukan, totalPengeluaran, totalSaldo, filtered });
+        setShowReportModal('print');
     };
 
     const fetchBon = async () => {
@@ -403,6 +472,20 @@ export default function BukuKasView() {
                     <h1 className="text-3xl font-extrabold tracking-tight">Toko Berkah Jaya</h1>
                     <p className="text-purple-200 text-sm mt-1">Buku Kas Harian & Manajemen Keuangan Operasional</p>
                 </div>
+                <div className="flex flex-wrap items-center gap-3">
+                    <button onClick={handleExportExcel} className="bg-white/10 hover:bg-white/20 text-white px-4 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-2 border border-white/20 transition-all">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        Export Excel
+                    </button>
+                    <button onClick={() => handleOpenReport('pl')} className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-2 shadow-lg transition-all">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                        Laporan Laba Rugi
+                    </button>
+                    <button onClick={() => handleOpenReport('cashflow')} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-2 shadow-lg transition-all">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                        Arus Kas & Bank
+                    </button>
+                </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 text-white p-5 rounded-2xl shadow-xl flex items-center justify-between">
@@ -510,18 +593,18 @@ export default function BukuKasView() {
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
                                 <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Tanggal</label>
-                                <input type="date" value={form.tanggal} onChange={(e) => setForm({...form, tanggal: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm" required/>
+                                <input type="date" value={form.tanggal} onChange={(e) => setForm({...form, tanggal: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm text-slate-900" required/>
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Jenis Transaksi</label>
-                                <select value={form.jenis_transaksi} onChange={(e) => setForm({...form, jenis_transaksi: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm bg-white">
+                                <select value={form.jenis_transaksi} onChange={(e) => setForm({...form, jenis_transaksi: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm bg-white text-slate-900">
                                     <option value="Pemasukan">Pemasukan (Masuk)</option>
                                     <option value="Pengeluaran">Pengeluaran (Keluar)</option>
                                 </select>
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Sumber Kas / Metode Pembayaran</label>
-                                <select value={form.sumber_kas} onChange={(e) => setForm({...form, sumber_kas: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm bg-white">
+                                <select value={form.sumber_kas} onChange={(e) => setForm({...form, sumber_kas: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm bg-white text-slate-900">
                                     {CASH_SOURCES.map(s => (
                                         <option key={s.value} value={s.value}>{s.label}</option>
                                     ))}
@@ -529,7 +612,7 @@ export default function BukuKasView() {
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Kategori</label>
-                                <select value={form.kategori} onChange={(e) => setForm({...form, kategori: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm bg-white">
+                                <select value={form.kategori} onChange={(e) => setForm({...form, kategori: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm bg-white text-slate-900">
                                     {getKategoriOptions().map((kat, i) => (
                                         <option key={i} value={kat}>{kat}</option>
                                     ))}
@@ -537,7 +620,7 @@ export default function BukuKasView() {
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Keterangan</label>
-                                <input type="text" value={form.keterangan} onChange={(e) => setForm({...form, keterangan: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm" required/>
+                                <input type="text" value={form.keterangan} onChange={(e) => setForm({...form, keterangan: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm text-slate-900" required/>
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Nominal (Rp)</label>
@@ -553,8 +636,27 @@ export default function BukuKasView() {
                     <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-lg border border-slate-100">
                         <h2 className="text-lg font-bold text-purple-900 mb-4 pb-2 border-b border-slate-100 flex items-center justify-between">
                             Riwayat Buku Kas
-                            <span className="text-xs text-slate-400 font-medium bg-slate-100 px-2.5 py-1 rounded-full">{transaksi.length} transaksi</span>
+                            <span className="text-xs text-slate-400 font-medium bg-slate-100 px-2.5 py-1 rounded-full">{getFilteredTransaksi.length} transaksi</span>
                         </h2>
+                        <div className="mb-4 flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <label className="text-xs font-semibold text-slate-600 uppercase text-white/0 hidden sm:block">Periode:</label>
+                                <select value={periodeFilter} onChange={(e) => setPeriodeFilter(e.target.value)} className="px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm bg-white text-slate-900 min-w-[160px]">
+                                    <option value="semua">Semua Waktu</option>
+                                    <option value="hari_ini">Hari Ini</option>
+                                    <option value="minggu_ini">Minggu Ini</option>
+                                    <option value="bulan_ini">Bulan Ini</option>
+                                    <option value="custom">Custom Range</option>
+                                </select>
+                                {periodeFilter === 'custom' && (
+                                    <div className="flex items-center gap-2">
+                                        <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm bg-white text-slate-900" />
+                                        <span className="text-slate-400 text-sm">s/d</span>
+                                        <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm bg-white text-slate-900" />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
@@ -568,8 +670,8 @@ export default function BukuKasView() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 text-sm">
-                                    {transaksi.length > 0 ? (
-                                        transaksi.map((t) => (
+                                    {getFilteredTransaksi.length > 0 ? (
+                                        getFilteredTransaksi.map((t) => (
                                             <tr key={t.id} className="hover:bg-slate-50 transition-colors">
                                                 <td className="py-3.5 px-4 text-slate-600 font-medium">{t.tanggal}</td>
                                                 <td className="py-3.5 px-4">
@@ -764,6 +866,166 @@ export default function BukuKasView() {
                         </form>
                     </div>
                 </div>
+            )}
+
+            {showReportModal === 'print' && reportData && (
+                <>
+                    <style>{`
+                        @media print {
+                            body * { visibility: hidden !important; }
+                            .fixed inset-0 z-50, .fixed.z-50, .modal-report-overlay,
+                            #print-report, #print-report * { display: none !important; }
+                            #print-report, #print-report * { position: absolute !important; left: 0 !important; top: 0 !important; visibility: visible !important; width: 100% !important; }
+                            .print-report-panel { box-shadow: none !important; border: none !important; max-height: none !important; max-width: none !important; }
+                            .print-report-inner { padding: 0 !important; overflow: visible !important; background: #fff !important; color: #000 !important; }
+                            .print-report-header-gradient { background: #fff !important; }
+                            .print-report-header-row { border-bottom: 2px solid #000 !important; }
+                            .print-report-table th { background: #f0f0f0 !important; border-bottom: 1px solid #ccc !important; font-weight: bold !important; color: #000 !important; }
+                            .print-report-table td { border-bottom: 1px solid #ddd !important; color: #000 !important; }
+                            .print-report-table tr:hover { background: transparent !important; }
+                            .print-report-footer { display: none !important; }
+                            .print-report-icon { display: none !important; }
+                        }
+                    `}</style>
+                    <div id="print-report" className="print-report-panel fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowReportModal(null)}>
+                        <div className="print-report-inner bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-auto animate-slide-up" onClick={(e) => e.stopPropagation()}>
+                        <div className="p-6 border-b border-slate-200 sticky top-0 bg-white z-10">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-xl font-bold text-purple-900 flex items-center gap-2">
+                                    {reportData.type === 'pl' && (
+                                        <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                                    )}
+                                    {reportData.type === 'cashflow' && (
+                                        <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                                    )}
+                                    {reportData.type === 'pl' ? 'Laporan Laba Rugi Bulanan' : reportData.type === 'cashflow' ? 'Laporan Arus Kas Bulanan' : 'Laporan Keuangan Bank'}
+                                </h3>
+                                <div className="flex gap-2">
+                                    <button onClick={() => window.print()} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-colors flex items-center gap-2">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2h6zM12 12v6m0 0l3-3m-3 3l-3-3"/></svg>
+                                        Cetak / PDF
+                                    </button>
+                                    <button onClick={() => setShowReportModal(null)} className="px-4 py-2 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors">Tutup</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-6 print:p-0 print:max-w-none print:h-screen print:overflow-visible">
+                            <div className="bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 text-white p-8 rounded-2xl print:rounded-none print:shadow-none print:text-black print:bg-white print:border print:border-slate-200">
+                                <div className="flex justify-between items-start mb-8 print:flex-print">
+                                    <div>
+                                        <h2 className="text-2xl font-bold mb-2">Laporan Keuangan: {reportData.type === 'pl' ? 'Laba Rugi' : reportData.type === 'cashflow' ? 'Arus Kas' : 'Bank'}</h2>
+                                        <p className="text-purple-200 print:text-slate-600">Periode: {periodeFilter === 'custom' ? `${customStart} s/d ${customEnd}` : periodeFilter === 'hari_ini' ? 'Hari Ini' : periodeFilter === 'minggu_ini' ? 'Minggu Ini' : periodeFilter === 'bulan_ini' ? 'Bulan Ini' : 'Semua Waktu'}</p>
+                                        <p className="text-purple-300 text-sm mt-1 print:text-slate-500">Dicetak pada: {new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                                    </div>
+                                    <div className="text-right print:text-left">
+                                        <div className="w-24 h-24 bg-white/20 rounded-2xl flex items-center justify-center print:w-16 print:h-16 print:bg-slate-100">
+                                            <svg className="w-12 h-12 text-white print:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547L6.380 10.6A2 2 0 004 10v10a2 2 0 002 2h10a2 2 0 002-2v-4.586a2 2 0 00-.471-1.022M12 2.586a2 2 0 112.828 2.828L6.364 7.64a2 2 0 01-1.02 1.02L2.586 12 12 2.586z"/></svg>
+                                        </div>
+                                        <h3 className="text-lg font-bold mt-2">Toko Berkah Jaya</h3>
+                                    </div>
+                                </div>
+
+                                {reportData.type === 'pl' && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-2">
+                                        <div className="bg-white/10 p-6 rounded-2xl print:bg-slate-50 print:border print:border-slate-200">
+                                            <h4 className="text-lg font-semibold mb-4 text-purple-200 print:text-slate-700">Ringkasan Pendapatan</h4>
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between py-2 border-b border-white/10 print:border-slate-200">
+                                                    <span className="text-purple-300 print:text-slate-600">Total Pemasukan</span>
+                                                    <span className="font-bold text-emerald-400 print:text-emerald-600">{formatRupiah(reportData.totalPemasukan)}</span>
+                                                </div>
+                                                <div className="flex justify-between py-2 border-b border-white/10 print:border-slate-200">
+                                                    <span className="text-purple-300 print:text-slate-600">Total Pengeluaran</span>
+                                                    <span className="font-bold text-rose-400 print:text-rose-600">{formatRupiah(reportData.totalPengeluaran)}</span>
+                                                </div>
+                                                <div className="flex justify-between py-2 border-b border-white/10 print:border-slate-200">
+                                                    <span className="text-purple-300 print:text-slate-600">Laba Kotor</span>
+                                                    <span className="font-bold text-white print:text-slate-900">{formatRupiah(reportData.totalPemasukan - reportData.totalPengeluaran)}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="bg-white/10 p-6 rounded-2xl print:bg-slate-50 print:border print:border-slate-200">
+                                            <h4 className="text-lg font-semibold mb-4 text-purple-200 print:text-slate-700">Kategori Transaksi</h4>
+                                            <div className="space-y-2 max-h-64 overflow-auto print:max-h-none">
+                                                {(() => {
+                                                    const pemasukan = reportData.filtered.filter(t => t.jenis_transaksi === 'Pemasukan');
+                                                    const pengeluaran = reportData.filtered.filter(t => t.jenis_transaksi === 'Pengeluaran');
+                                                    const kategoriMap = {};
+                                                    pemasukan.concat(pengeluaran).forEach(t => {
+                                                        if (!kategoriMap[t.kategori]) kategoriMap[t.kategori] = { pemasukan: 0, pengeluaran: 0 };
+                                                        if (t.jenis_transaksi === 'Pemasukan') kategoriMap[t.kategori].pemasukan += parseFloat(String(t.nominal).replace(/\\D/g, '') || 0);
+                                                        else kategoriMap[t.kategori].pengeluaran += parseFloat(String(t.nominal).replace(/\\D/g, '') || 0);
+                                                    });
+                                                    return Object.entries(kategoriMap).map(([kat, val]) => (
+                                                        <div key={kat} className="flex justify-between py-1 print:flex-print">
+                                                            <span className="text-purple-300 text-sm print:text-slate-600 truncate pr-2">{kat}</span>
+                                                            <span className="text-xs print:text-xs">Pemasukan: {formatRupiah(val.pemasukan)} | Pengeluaran: {formatRupiah(val.pengeluaran)}</span>
+                                                        </div>
+                                                    ));
+                                                })()}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {reportData.type === 'cashflow' && (
+                                    <div className="space-y-6 print:grid-cols-1">
+                                        <div className="bg-white/10 p-6 rounded-2xl print:bg-slate-50 print:border print:border-slate-200">
+                                            <h4 className="text-lg font-semibold mb-4 text-purple-200 print:text-slate-700">Ringkasan Arus Kas</h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                <div className="text-center print:text-left">
+                                                    <p className="text-purple-300 text-sm print:text-slate-600">Total Kas Masuk</p>
+                                                    <p className="text-2xl font-bold text-emerald-400 print:text-emerald-600">{formatRupiah(reportData.totalPemasukan)}</p>
+                                                </div>
+                                                <div className="text-center print:text-left">
+                                                    <p className="text-purple-300 text-sm print:text-slate-600">Total Kas Keluar</p>
+                                                    <p className="text-2xl font-bold text-rose-400 print:text-rose-600">{formatRupiah(reportData.totalPengeluaran)}</p>
+                                                </div>
+                                                <div className="text-center print:text-left">
+                                                    <p className="text-purple-300 text-sm print:text-slate-600">Saldo Akhir</p>
+                                                    <p className="text-2xl font-bold text-white print:text-slate-900">{formatRupiah(reportData.totalPemasukan - reportData.totalPengeluaran)}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="mt-8 print:mt-4">
+                                    <h4 className="text-lg font-semibold mb-4 text-purple-200 print:text-slate-700">Detail Transaksi</h4>
+                                    <div className="overflow-x-auto print:overflow-visible">
+                                        <table className="w-full text-sm print:text-xs">
+                                            <thead className="print:table-header-group">
+                                                <tr className="border-b border-white/20 print:border-slate-300">
+                                                    <th className="py-2 text-left text-purple-300 print:text-slate-700">Tanggal</th>
+                                                    <th className="py-2 text-left text-purple-300 print:text-slate-700">Sumber</th>
+                                                    <th className="py-2 text-left text-purple-300 print:text-slate-700">Keterangan</th>
+                                                    <th className="py-2 text-left text-purple-300 print:text-slate-700">Jenis</th>
+                                                    <th className="py-2 text-right text-purple-300 print:text-slate-700">Nominal</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="print:table-row-group">
+                                                {reportData.filtered.map((t) => (
+                                                    <tr key={t.id} className="border-b border-white/5 print:border-slate-200">
+                                                        <td className="py-2 text-white print:text-slate-900">{t.tanggal}</td>
+                                                        <td className="py-2 text-purple-200 print:text-slate-700">{t.sumber_kas}</td>
+                                                        <td className="py-2 text-purple-200 print:text-slate-700">{t.keterangan}</td>
+                                                        <td className="py-2 text-purple-200 print:text-slate-700">{t.jenis_transaksi}</td>
+                                                        <td className="py-2 text-right font-bold text-white print:text-slate-900">{t.jenis_transaksi === 'Pemasukan' ? '+' : '-'} {formatRupiah(t.nominal)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div className="mt-8 p-6 bg-gradient-to-r from-purple-800 to-indigo-900 rounded-2xl text-white print:hidden">
+                                    <p className="text-center text-purple-200">Laporan Keuangan ini dihasilkan oleh UMKM Pro AI • Untuk keperluan pengajuan pinjaman bank, kontak admin untuk format PDF resmi</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    </div>
+                </>
             )}
         </div>
     );

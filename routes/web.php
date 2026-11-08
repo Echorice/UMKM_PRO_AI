@@ -12,6 +12,20 @@ Route::get('/', function () {
     ]);
 });
 
+// NEW: Rute Penilaian Baru (Wizard Form)
+Route::get('/penilaian-baru', function () {
+    return Inertia::render('Home', [
+        'activeTab' => 'penilaianBaru'
+    ]);
+});
+
+// NEW: Rute Hasil Penilaian
+Route::get('/hasil-penilaian', function () {
+    return Inertia::render('Home', [
+        'activeTab' => 'hasilPenilaian'
+    ]);
+});
+
 Route::post('/hitung-kesehatan', [UmkmHealthController::class, 'store']);
 Route::post('/api/analisis-ml', [UmkmHealthController::class, 'store']);
 

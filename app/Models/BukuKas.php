@@ -9,11 +9,12 @@ class BukuKas extends Model
 {
     use HasFactory;
 
-    // Tambahkan baris ini untuk mengizinkan kolom-kolom ini diisi data
     protected $fillable = [
         'tanggal',
         'keterangan',
         'jenis',
+        'jenis_transaksi',
+        'sumber_kas',
         'nominal',
         'kategori'
     ];

@@ -26,12 +26,14 @@ class BukuKasController extends Controller
             'tanggal' => 'required|date',
             'keterangan' => 'required|string|max:255',
             'jenis_transaksi' => 'required|in:Pemasukan,Pengeluaran',
+            'sumber_kas' => 'nullable|string|max:50',
             'kategori' => 'required|string',
             'nominal' => 'required|numeric|min:0',
         ]);
 
-        // Sync legacy 'jenis' column
+        // Sync legacy 'jenis' column (lowercase) & ensure sumber_kas fallback
         $validated['jenis'] = strtolower($validated['jenis_transaksi']);
+        $validated['sumber_kas'] = (!empty($validated['sumber_kas'])) ? $validated['sumber_kas'] : 'KAS_TUNAI';
 
         $transaksi = BukuKas::create($validated);
 
@@ -48,23 +50,31 @@ class BukuKasController extends Controller
         return response()->json(BukuKas::all());
     }
 
+    // Canonical helper: resolve jenis_transaksi (title case) -> jenis (lowercase)
+    protected function resolveJenis(Request $request)
+    {
+        $jenisTransaksi = $request->input('jenis_transaksi') ?? $request->input('jenis');
+        if (!$jenisTransaksi) {
+            return 'pemasukan'; // default
+        }
+        $jenis = strtolower(trim($jenisTransaksi));
+        return in_array($jenis, ['pemasukan', 'pengeluaran']) ? $jenis : 'pemasukan';
+    }
+
     // API: Menyimpan transaksi baru (JSON API)
     public function apiStore(Request $request)
     {
-        $jenis = $request->input('jenis_transaksi') ?? $request->input('jenis');
-        if ($jenis) {
-            $jenis = strtolower($jenis);
-        }
-
-        $request->merge(['jenis' => $jenis]);
-
         $validated = $request->validate([
             'tanggal' => 'required|date',
             'keterangan' => 'required|string|max:255',
-            'jenis' => 'required|in:pemasukan,pengeluaran',
+            'jenis_transaksi' => 'required|in:Pemasukan,Pengeluaran',
+            'sumber_kas' => 'nullable|string|max:50',
             'nominal' => 'required|numeric|min:0',
-            'kategori' => 'nullable|string|max:255',
+            'kategori' => 'required|string|max:255',
         ]);
+
+        $validated['jenis'] = $this->resolveJenis($request);
+        $validated['sumber_kas'] = (!empty($validated['sumber_kas'])) ? $validated['sumber_kas'] : 'KAS_TUNAI';
 
         $transaksi = BukuKas::create($validated);
 
@@ -79,21 +89,17 @@ class BukuKasController extends Controller
             return response()->json(['error' => 'Data tidak ditemukan'], 404);
         }
 
-        $jenis = $request->input('jenis_transaksi') ?? $request->input('jenis');
-        if ($jenis) {
-            $jenis = strtolower($jenis);
-        }
-
-        // Merge jenis into request for validation
-        $request->merge(['jenis' => $jenis]);
-
         $validated = $request->validate([
             'tanggal' => 'required|date',
             'keterangan' => 'required|string|max:255',
-            'jenis' => 'required|in:pemasukan,pengeluaran',
+            'jenis_transaksi' => 'required|in:Pemasukan,Pengeluaran',
+            'sumber_kas' => 'nullable|string|max:50',
             'nominal' => 'required|numeric|min:0',
-            'kategori' => 'nullable|string|max:255',
+            'kategori' => 'required|string|max:255',
         ]);
+
+        $validated['jenis'] = $this->resolveJenis($request);
+        $validated['sumber_kas'] = (!empty($validated['sumber_kas'])) ? $validated['sumber_kas'] : 'KAS_TUNAI';
 
         $transaksi->update($validated);
 

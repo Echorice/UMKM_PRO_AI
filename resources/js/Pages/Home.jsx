@@ -1,10 +1,10 @@
 import React from 'react';
 import { usePage } from '@inertiajs/react';
 import DashboardLayout from '@/Layouts/DashboardLayout';
-import DashboardView from '@/Components/Views/Dashboard';
-import AnalisisAI from '@/Components/Views/AnalisisAI';
-import BukuKas from '@/Components/Views/BukuKas';
-import ManajemenStok from '@/Components/Views/ManajemenStok';
+import DashboardView from '@/Components/Organisms/Dashboard';
+import AnalisisAI from '@/Components/Organisms/AnalisisAI';
+import BukuKas from '@/Components/Organisms/BukuKas';
+import ManajemenStok from '@/Components/Organisms/ManajemenStok';
 
 export default function Home() {
     const { props } = usePage();

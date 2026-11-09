@@ -75,3 +75,8 @@ Route::get('/manajemen-stok', function () {
         'activeTab' => 'manajemenStok'
     ]);
 });
+use App\Http\Controllers\BonController;
+Route::get('/api/bon', [BonController::class, 'apiIndex']);
+Route::post('/api/bon', [BonController::class, 'apiStore']);
+Route::put('/api/bon/{id}', [BonController::class, 'apiUpdate']);
+Route::delete('/api/bon/{id}', [BonController::class, 'apiDestroy']);

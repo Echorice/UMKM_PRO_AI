@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -31,6 +31,21 @@ export default function BukuKasView() {
     const [editId, setEditId] = useState(null);
     const [bonEditId, setBonEditId] = useState(null);
     const [showBonModal, setShowBonModal] = useState(false);
+
+    // Toolbar state (tabel riwayat bon) — client-side filter/sort/pagination
+    const [bonSearch, setBonSearch] = useState('');
+    const [bonJenisFilter, setBonJenisFilter] = useState('SEMUA');
+    const [bonStatusFilter, setBonStatusFilter] = useState('SEMUA');
+    const [bonDueSort, setBonDueSort] = useState('desc');
+    const [bonPerPage, setBonPerPage] = useState(25);
+    const [bonPage, setBonPage] = useState(1);
+
+    // Toolbar state (tabel riwayat Buku Kas) — hanya tampilan tabel
+    const [transaksiSearch, setTransaksiSearch] = useState('');
+    const [transaksiJenisFilter, setTransaksiJenisFilter] = useState('SEMUA');
+    const [transaksiSumberFilter, setTransaksiSumberFilter] = useState('SEMUA');
+    const [transaksiPerPage, setTransaksiPerPage] = useState(25);
+    const [transaksiPage, setTransaksiPage] = useState(1);
 
     // Filter & Reporting State
     const [periodeFilter, setPeriodeFilter] = useState('semua');
@@ -117,6 +132,41 @@ export default function BukuKasView() {
         });
     }, [transaksi, periodeFilter, customStart, customEnd]);
 
+    // View-only pipeline for the table (badge, export & report tetap pakai getFilteredTransaksi)
+    const transaksiView = useMemo(() => {
+        let rows = [...getFilteredTransaksi];
+
+        if (transaksiSearch) {
+            const term = transaksiSearch.toLowerCase();
+            rows = rows.filter(t =>
+                (t.keterangan && t.keterangan.toLowerCase().includes(term)) ||
+                (t.kategori && t.kategori.toLowerCase().includes(term)) ||
+                (t.sumber_kas && t.sumber_kas.toLowerCase().includes(term)) ||
+                String(t.nominal).includes(term) ||
+                (t.tanggal && t.tanggal.toLowerCase().includes(term))
+            );
+        }
+
+        if (transaksiJenisFilter !== 'SEMUA') {
+            rows = rows.filter(t => t.jenis_transaksi === transaksiJenisFilter);
+        }
+
+        if (transaksiSumberFilter !== 'SEMUA') {
+            rows = rows.filter(t => (t.sumber_kas || 'KAS_TUNAI') === transaksiSumberFilter);
+        }
+
+        return rows;
+    }, [getFilteredTransaksi, transaksiSearch, transaksiJenisFilter, transaksiSumberFilter]);
+
+    useEffect(() => {
+        setTransaksiPage(1);
+    }, [transaksiSearch, transaksiJenisFilter, transaksiSumberFilter, transaksiPerPage]);
+
+    const totalTransaksiPages = transaksiPerPage === 'SEMUA' ? 1 : Math.ceil(transaksiView.length / Number(transaksiPerPage));
+    const transaksiPageSlice = transaksiPerPage === 'SEMUA'
+        ? transaksiView
+        : transaksiView.slice((transaksiPage - 1) * Number(transaksiPerPage), transaksiPage * Number(transaksiPerPage));
+
     const handleExportExcel = () => {
         try {
             let csvContent = "data:text/csv;charset=utf-8,Tanggal,Sumber,Keterangan,Jenis,Nominal,Kategori\r\n";
@@ -145,6 +195,64 @@ export default function BukuKasView() {
         const totalSaldo = totalPemasukan - totalPengeluaran;
         setReportData({ type, totalPemasukan, totalPengeluaran, totalSaldo, filtered });
         setShowReportModal('print');
+    };
+
+    const handleExportMarkdown = () => {
+        try {
+            const typeLabel = reportData.type === 'pl' ? 'LABA RUGI' : reportData.type === 'cashflow' ? 'ARUS KAS' : 'ARUS KAS BANK';
+            const periodeLabel = periodeFilter === 'custom' ? `${customStart} s/d ${customEnd}` : periodeFilter === 'hari_ini' ? 'Hari Ini' : periodeFilter === 'minggu_ini' ? 'Minggu Ini' : periodeFilter === 'bulan_ini' ? 'Bulan Ini' : 'Semua Waktu';
+            const rupiah = (n) => `Rp ${Number(n).toLocaleString('id-ID')}`;
+            const lines = [];
+            lines.push(`# LAPORAN KEUANGAN: ${typeLabel}`);
+            lines.push('');
+            lines.push('## Informasi Toko');
+            lines.push(`- Nama Toko : Toko Berkah Jaya`);
+            lines.push(`- Periode   : ${periodeLabel}`);
+            lines.push(`- Waktu Cetak : ${new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`);
+            lines.push('');
+            lines.push('## 1. Ringkasan Pendapatan');
+            lines.push(`- Total Pemasukan  : ${rupiah(reportData.totalPemasukan)}`);
+            lines.push(`- Total Pengeluaran: ${rupiah(reportData.totalPengeluaran)}`);
+            lines.push(`- Saldo Bersih     : ${rupiah(reportData.totalSaldo)}`);
+            lines.push('');
+            lines.push('## 2. Kategori Transaksi');
+            lines.push(`| Kategori | Pemasukan | Pengeluaran |`);
+            lines.push(`| -------- | --------- | ----------- |`);
+            const kategoriMap = {};
+            reportData.filtered.forEach(t => {
+                if (!kategoriMap[t.kategori]) kategoriMap[t.kategori] = { pemasukan: 0, pengeluaran: 0 };
+                if (t.jenis_transaksi === 'Pemasukan') kategoriMap[t.kategori].pemasukan += parseFloat(String(t.nominal).replace(/\\D/g, '') || 0);
+                else kategoriMap[t.kategori].pengeluaran += parseFloat(String(t.nominal).replace(/\\D/g, '') || 0);
+            });
+            Object.entries(kategoriMap).forEach(([kat, val]) => {
+                lines.push(`| ${kat} | ${val.pemasukan ? rupiah(val.pemasukan) : '-'} | ${val.pengeluaran ? rupiah(val.pengeluaran) : '-'} |`);
+            });
+            lines.push('');
+            lines.push('## 3. Detail Transaksi');
+            lines.push(`| Tanggal | Sumber Kas | Keterangan | Jenis | Nominal |`);
+            lines.push(`| -------- | --------- | ----------- | :--- | :--- |`);
+            reportData.filtered.forEach(t => {
+                const sgn = t.jenis_transaksi === 'Pemasukan' ? '+' : '-';
+                lines.push(`| ${t.tanggal} | ${t.sumber_kas || 'KAS_TUNAI'} | ${t.keterangan || '-'} | ${t.jenis_transaksi} | ${sgn} ${rupiah(Math.abs(parseFloat(t.nominal)))} |`);
+            });
+            lines.push('');
+            lines.push('---');
+            lines.push(`*© UMKM Pro AI • Laporan ${typeLabel} • Format BW OCR*`);
+
+            // Trigger download
+            const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `laporan-${reportData.type}-${new Date().toISOString().split('T')[0]}.md`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            showToast('Export Markdown berhasil', 'success');
+        } catch (err) {
+            console.error('Export Markdown error:', err);
+            showToast('Gagal export Markdown', 'error');
+        }
     };
 
     const fetchBon = async () => {
@@ -231,6 +339,47 @@ export default function BukuKasView() {
     const totalHutang = bonList
         .filter(b => b.jenis_bon === 'HUTANG' && b.status === 'BELUM_LUNAS')
         .reduce((acc, curr) => acc + Number(curr.nominal), 0);
+
+    // Derived & filtered list for the riwayat bon table
+    const bonListFiltered = useMemo(() => {
+        let result = [...bonList];
+
+        if (bonSearch) {
+            const term = bonSearch.toLowerCase();
+            result = result.filter(b =>
+                b.nama_pihak.toLowerCase().includes(term) ||
+                (b.keterangan && b.keterangan.toLowerCase().includes(term)) ||
+                String(b.nominal).includes(term) ||
+                b.tanggal_jatuh_tempo.toLowerCase().includes(term)
+            );
+        }
+
+        if (bonJenisFilter !== 'SEMUA') {
+            result = result.filter(b => b.jenis_bon === bonJenisFilter);
+        }
+
+        if (bonStatusFilter !== 'SEMUA') {
+            result = result.filter(b => b.status === bonStatusFilter);
+        }
+
+        result.sort((a, b) => {
+            const da = new Date(a.tanggal_jatuh_tempo);
+            const db = new Date(b.tanggal_jatuh_tempo);
+            if (bonDueSort === 'asc') return da.getTime() - db.getTime();
+            else return db.getTime() - da.getTime();
+        });
+
+        return result;
+    }, [bonList, bonSearch, bonJenisFilter, bonStatusFilter, bonDueSort]);
+
+    useEffect(() => {
+        setBonPage(1);
+    }, [bonSearch, bonJenisFilter, bonStatusFilter, bonPerPage]);
+
+    const totalBonPages = bonPerPage === 'SEMUA' ? 1 : Math.ceil(bonListFiltered.length / Number(bonPerPage));
+    const bonPageSlice = bonPerPage === 'SEMUA' 
+        ? bonListFiltered 
+        : bonListFiltered.slice((bonPage - 1) * Number(bonPerPage), bonPage * Number(bonPerPage));
 
     const getReminders = () => {
         const today = new Date();
@@ -435,6 +584,13 @@ export default function BukuKasView() {
         return { text: `${diff} hari lagi`, class: 'text-slate-600 bg-slate-50', urgent: false };
     };
 
+    const formatTanggalISO = (isoString) => {
+        if (!isoString) return '-';
+        const d = new Date(isoString);
+        return `${d.getDate().toString().padStart(2, '0')}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getFullYear()}`;
+    };
+
+
     const SourceIcon = ({ value, className = 'w-4 h-4' }) => {
         const icons = {
             KAS_TUNAI: (
@@ -518,7 +674,7 @@ export default function BukuKasView() {
                 <div className="bg-gradient-to-br from-blue-500 to-blue-700 text-white p-5 rounded-2xl shadow-xl flex items-center justify-between">
                     <div>
                         <p className="text-blue-100 text-sm font-medium">Piutang Aktif</p>
-                        <h3 className="text-2xl font-bold mt-1">{formatRupiahShort(totalPiutang)}</h3>
+                        <h3 className="text-2xl font-bold mt-1">{formatRupiah(totalPiutang)}</h3>
                     </div>
                     <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-white">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
@@ -550,7 +706,7 @@ export default function BukuKasView() {
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
                                                 )}
                                             </svg>
-                                            {b.nama_pihak}: {formatRupiahShort(b.nominal)} ({due.text})
+                                            {b.nama_pihak}: {formatRupiahShort(b.nominal)} | {formatTanggalISO(b.tanggal_jatuh_tempo)} ({due.text})
                                         </span>
                                     );
                                 })}
@@ -571,7 +727,7 @@ export default function BukuKasView() {
                     </button>
                     <button
                         onClick={() => setActiveTab('bon')}
-                        className={`pb-3 px-1 border-b-2 font-medium text-sm transition-colors flex items-center gap-2 ${activeTab === 'bon' ? 'border-purple-600 text-purple-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                        className={`pb-3 px-1 border-b-2 font-medium text-sm transition-colors flex items-center gap-2 ${activeTab === 'bon' ? 'border-purple-600 text-purple-700' : 'border-transparent text-purple-300 hover:text-slate-700'}`}
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
                         Catatan Bon (Hutang & Piutang)
@@ -580,7 +736,7 @@ export default function BukuKasView() {
             </div>
 
             {activeTab === 'transaksi' && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="flex flex-col gap-6">
                     <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100 h-fit">
                         <h2 className="text-lg font-bold text-purple-900 mb-4 pb-2 border-b border-slate-100 flex justify-between items-center">
                             <span className="flex items-center gap-2">
@@ -590,7 +746,7 @@ export default function BukuKasView() {
                             {editId && <button type="button" onClick={batalEdit} className="text-xs text-rose-500 hover:underline">Batal Edit</button>}
                         </h2>
 
-                        <form onSubmit={handleSubmit} className="space-y-4">
+                        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Tanggal</label>
                                 <input type="date" value={form.tanggal} onChange={(e) => setForm({...form, tanggal: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm text-slate-900" required/>
@@ -618,7 +774,7 @@ export default function BukuKasView() {
                                     ))}
                                 </select>
                             </div>
-                            <div>
+                            <div className="md:col-span-2">
                                 <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Keterangan</label>
                                 <input type="text" value={form.keterangan} onChange={(e) => setForm({...form, keterangan: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm text-slate-900" required/>
                             </div>
@@ -627,21 +783,22 @@ export default function BukuKasView() {
                                 <input type="text" value={form.nominal} onChange={(e) => handleNominalChange(e, 'transaksi')} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm font-semibold text-purple-900" required/>
                             </div>
 
-                            <button type="submit" disabled={loading} className={`w-full py-3 text-white font-bold rounded-xl shadow-lg transition-all text-sm disabled:opacity-50 ${editId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-purple-600 hover:bg-purple-700'}`}>
+                            <button type="submit" disabled={loading} className={`md:col-span-2 w-full py-3 text-white font-bold rounded-xl shadow-lg transition-all text-sm disabled:opacity-50 ${editId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-purple-600 hover:bg-purple-700'}`}>
                                 {loading ? 'Menyimpan...' : (editId ? 'Update Transaksi' : 'Simpan Transaksi')}
                             </button>
                         </form>
                     </div>
 
-                    <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-lg border border-slate-100">
+                    <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100">
                         <h2 className="text-lg font-bold text-purple-900 mb-4 pb-2 border-b border-slate-100 flex items-center justify-between">
                             Riwayat Buku Kas
                             <span className="text-xs text-slate-400 font-medium bg-slate-100 px-2.5 py-1 rounded-full">{getFilteredTransaksi.length} transaksi</span>
                         </h2>
-                        <div className="mb-4 flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
-                            <div className="flex items-center gap-3 flex-wrap">
-                                <label className="text-xs font-semibold text-slate-600 uppercase text-white/0 hidden sm:block">Periode:</label>
-                                <select value={periodeFilter} onChange={(e) => setPeriodeFilter(e.target.value)} className="px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm bg-white text-slate-900 min-w-[160px]">
+                        <div className="mb-4 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                            {/* Baris filter: periode · jenis · sumber · jumlah baris */}
+                            <div className="flex flex-wrap items-center gap-2">
+                                <label htmlFor="filter-periode" className="text-xs font-semibold uppercase text-slate-500">Periode</label>
+                                <select id="filter-periode" value={periodeFilter} onChange={(e) => setPeriodeFilter(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-xs font-semibold bg-white text-slate-800 min-w-[150px]">
                                     <option value="semua">Semua Waktu</option>
                                     <option value="hari_ini">Hari Ini</option>
                                     <option value="minggu_ini">Minggu Ini</option>
@@ -650,13 +807,49 @@ export default function BukuKasView() {
                                 </select>
                                 {periodeFilter === 'custom' && (
                                     <div className="flex items-center gap-2">
-                                        <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm bg-white text-slate-900" />
-                                        <span className="text-slate-400 text-sm">s/d</span>
-                                        <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm bg-white text-slate-900" />
+                                        <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-xs font-semibold bg-white text-slate-800" />
+                                        <span className="text-slate-400 text-xs">s/d</span>
+                                        <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-xs font-semibold bg-white text-slate-800" />
                                     </div>
                                 )}
+                                <div className="hidden h-6 w-px bg-slate-200 sm:block" />
+                                <div className="inline-flex overflow-hidden rounded-xl border border-slate-200 bg-white">
+                                    {[['SEMUA', 'Semua'], ['Pemasukan', 'Pemasukan'], ['Pengeluaran', 'Pengeluaran']].map(([val, label]) => (
+                                        <button
+                                            key={val}
+                                            type="button"
+                                            onClick={() => setTransaksiJenisFilter(val)}
+                                            className={`px-3 py-2 text-xs font-bold transition-colors ${transaksiJenisFilter === val ? 'bg-purple-600 text-white' : 'text-slate-600 hover:bg-purple-50'}`}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <select value={transaksiSumberFilter} onChange={(e) => setTransaksiSumberFilter(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-xs font-semibold bg-white text-slate-800 min-w-[150px]">
+                                    <option value="SEMUA">Semua Sumber</option>
+                                    {CASH_SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                                </select>
+                                <div className="ml-auto flex items-center gap-2">
+                                    <label htmlFor="filter-baris" className="text-xs font-semibold uppercase text-slate-500">Baris</label>
+                                    <select id="filter-baris" value={transaksiPerPage} onChange={(e) => setTransaksiPerPage(e.target.value === 'SEMUA' ? 'SEMUA' : Number(e.target.value))} className="px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-xs font-semibold bg-white text-slate-800">
+                                        {[5, 25, 30, 50, 75, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                                        <option value="SEMUA">Semua</option>
+                                    </select>
+                                </div>
+                            </div>
+                            {/* Pencarian */}
+                            <div className="relative mt-3">
+                                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z"/></svg>
+                                <input
+                                    type="text"
+                                    value={transaksiSearch}
+                                    onChange={(e) => setTransaksiSearch(e.target.value)}
+                                    placeholder="Cari keterangan, kategori, nominal…"
+                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm bg-white text-slate-900 placeholder:text-slate-400"
+                                />
                             </div>
                         </div>
+
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
@@ -670,8 +863,8 @@ export default function BukuKasView() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 text-sm">
-                                    {getFilteredTransaksi.length > 0 ? (
-                                        getFilteredTransaksi.map((t) => (
+                                    {transaksiView.length > 0 ? (
+                                        transaksiPageSlice.map((t) => (
                                             <tr key={t.id} className="hover:bg-slate-50 transition-colors">
                                                 <td className="py-3.5 px-4 text-slate-600 font-medium">{t.tanggal}</td>
                                                 <td className="py-3.5 px-4">
@@ -703,11 +896,50 @@ export default function BukuKasView() {
                                             </tr>
                                         ))
                                     ) : (
-                                        <tr><td colSpan="6" className="text-center py-8 text-slate-400">Belum ada transaksi.</td></tr>
+                                        <tr><td colSpan="6" className="text-center py-8 text-slate-400">
+                                            {getFilteredTransaksi.length === 0 ? 'Belum ada transaksi.' : 'Tidak ada transaksi yang cocok.'}
+                                        </td></tr>
                                     )}
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* Footer pagination (sembunyi bila 1 halaman / mode Semua) */}
+                        {transaksiPerPage !== 'SEMUA' && totalTransaksiPages > 1 && (
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 mt-4 border-t border-slate-100">
+                                <p className="text-xs text-slate-500">
+                                    Menampilkan {((transaksiPage - 1) * Number(transaksiPerPage)) + 1}–{Math.min(transaksiPage * Number(transaksiPerPage), transaksiView.length)} dari {transaksiView.length} transaksi
+                                </p>
+                                <div className="flex items-center gap-1.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => setTransaksiPage(p => Math.max(1, p - 1))}
+                                        disabled={transaksiPage === 1}
+                                        className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-600 hover:bg-purple-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        ‹ Prev
+                                    </button>
+                                    {Array.from({ length: totalTransaksiPages }, (_, i) => i + 1).map(p => (
+                                        <button
+                                            key={p}
+                                            type="button"
+                                            onClick={() => setTransaksiPage(p)}
+                                            className={`w-8 h-8 rounded-lg text-xs font-bold transition-colors ${transaksiPage === p ? 'bg-purple-600 text-white' : 'border border-slate-200 text-slate-600 hover:bg-purple-50'}`}
+                                        >
+                                            {p}
+                                        </button>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        onClick={() => setTransaksiPage(p => Math.min(totalTransaksiPages, p + 1))}
+                                        disabled={transaksiPage >= totalTransaksiPages}
+                                        className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-600 hover:bg-purple-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        Next ›
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -716,8 +948,8 @@ export default function BukuKasView() {
                 <div className="space-y-6">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div>
-                            <h2 className="text-xl font-bold text-purple-900">Catatan Bon (Hutang & Piutang)</h2>
-                            <p className="text-slate-500 text-sm mt-1">Kelola piutang pelanggan & hutang supplier dengan jatuh tempo & status pelunasan</p>
+                            <h2 className="text-xl font-bold text-purple-300">Catatan Bon (Hutang & Piutang)</h2>
+                            <p className="text-purple-200 text-sm mt-1">Kelola piutang pelanggan & hutang supplier dengan jatuh tempo & status pelunasan</p>
                         </div>
                         <button
                             onClick={() => { batalBonEdit(); setShowBonModal(true); }}
@@ -761,6 +993,70 @@ export default function BukuKasView() {
                     </div>
 
                     <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100">
+                        {/* Toolbar: search / filter jenis / sort jatuh tempo / filter status / per-page */}
+                        <div className="flex flex-col gap-3 mb-5 pb-5 border-b border-slate-100">
+                            <div className="relative w-full">
+                                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z"/></svg>
+                                <input
+                                    type="text"
+                                    value={bonSearch}
+                                    onChange={(e) => setBonSearch(e.target.value)}
+                                    placeholder="Cari nama, keterangan, nominal…"
+                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-purple-500 focus:ring focus:ring-purple-200 focus:outline-none text-sm text-slate-800 placeholder:text-slate-400"
+                                />
+                            </div>
+                            <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+                                {/* Filter Jenis — segmented */}
+                                <div className="inline-flex rounded-xl border border-slate-200 overflow-hidden w-fit">
+                                    {[['SEMUA', 'Semua'], ['PIUTANG', 'Piutang'], ['HUTANG', 'Hutang']].map(([val, label]) => (
+                                        <button
+                                            key={val}
+                                            type="button"
+                                            onClick={() => setBonJenisFilter(val)}
+                                            className={`px-3.5 py-2 text-xs font-bold transition-colors ${bonJenisFilter === val ? 'bg-purple-600 text-white' : 'bg-white text-slate-600 hover:bg-purple-50'}`}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                                {/* Filter Status — segmented */}
+                                <div className="inline-flex rounded-xl border border-slate-200 overflow-hidden w-fit">
+                                    {[['SEMUA', 'Semua'], ['BELUM_LUNAS', 'Belum Lunas'], ['LUNAS', 'Lunas']].map(([val, label]) => (
+                                        <button
+                                            key={val}
+                                            type="button"
+                                            onClick={() => setBonStatusFilter(val)}
+                                            className={`px-3.5 py-2 text-xs font-bold transition-colors ${bonStatusFilter === val ? 'bg-purple-600 text-white' : 'bg-white text-slate-600 hover:bg-purple-50'}`}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                                {/* Sort Jatuh Tempo — toggle arah */}
+                                <button
+                                    type="button"
+                                    onClick={() => setBonDueSort(bonDueSort === 'asc' ? 'desc' : 'asc')}
+                                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-purple-50 transition-colors w-fit"
+                                    title="Ubah arah urutan jatuh tempo"
+                                >
+                                    <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+                                    Jatuh Tempo: {bonDueSort === 'asc' ? 'Terdekat' : 'Terjauh'}
+                                </button>
+                                {/* Per-page selector */}
+                                <div className="inline-flex items-center gap-2 w-fit lg:ml-auto">
+                                    <label className="text-xs font-semibold text-slate-500 uppercase">Baris</label>
+                                    <select
+                                        value={bonPerPage}
+                                        onChange={(e) => setBonPerPage(e.target.value === 'SEMUA' ? 'SEMUA' : Number(e.target.value))}
+                                        className="px-3 py-2 rounded-xl border border-slate-300 focus:border-purple-500 focus:ring focus:ring-purple-200 focus:outline-none text-xs font-semibold bg-white text-slate-800"
+                                    >
+                                        {[5, 25, 30, 50, 75, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                                        <option value="SEMUA">Semua</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
@@ -776,7 +1072,7 @@ export default function BukuKasView() {
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 text-sm">
                                     {bonList.length > 0 ? (
-                                        bonList.map((b) => {
+                                        bonPageSlice.map((b) => {
                                             const due = getDueDateStatus(b.tanggal_jatuh_tempo);
                                             return (
                                                 <tr key={b.id} className={`hover:bg-slate-50 transition-colors ${b.status === 'LUNAS' ? 'opacity-60' : ''}`}>
@@ -785,7 +1081,7 @@ export default function BukuKasView() {
                                                     <td className="py-3.5 px-4 text-right font-bold text-slate-900">{formatRupiah(b.nominal)}</td>
                                                     <td className="py-3.5 px-4">
                                                         <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${due.class} ${due.urgent && b.status === 'BELUM_LUNAS' ? 'animate-pulse' : ''}`}>
-                                                            {b.tanggal_jatuh_tempo} ({due.text})
+                                                            {formatTanggalISO(b.tanggal_jatuh_tempo)} ({due.text})
                                                         </span>
                                                     </td>
                                                     <td className="py-3.5 px-4 text-center">
@@ -806,57 +1102,103 @@ export default function BukuKasView() {
                                             );
                                         })
                                     ) : (
-                                        <tr><td colSpan="7" className="text-center py-8 text-slate-400">Belum ada catatan bon.</td></tr>
+                                        <tr><td colSpan="7" className="text-center py-8 text-slate-400">
+                                            {bonList.length === 0 ? 'Belum ada catatan bon.' : 'Tidak ada bon yang cocok dengan pencarian.'}
+                                        </td></tr>
                                     )}
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* Footer: info rentang + navigasi halaman (disembunyikan bila 1 halaman / mode Semua) */}
+                        {bonPerPage !== 'SEMUA' && totalBonPages > 1 && (
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 mt-4 border-t border-slate-100">
+                                <p className="text-xs text-slate-500">
+                                    Menampilkan {((bonPage - 1) * Number(bonPerPage)) + 1}–{Math.min(bonPage * Number(bonPerPage), bonListFiltered.length)} dari {bonListFiltered.length} bon
+                                </p>
+                                <div className="flex items-center gap-1.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => setBonPage(p => Math.max(1, p - 1))}
+                                        disabled={bonPage === 1}
+                                        className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-600 hover:bg-purple-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        ‹ Prev
+                                    </button>
+                                    {Array.from({ length: totalBonPages }, (_, i) => i + 1).map(p => (
+                                        <button
+                                            key={p}
+                                            type="button"
+                                            onClick={() => setBonPage(p)}
+                                            className={`w-8 h-8 rounded-lg text-xs font-bold transition-colors ${bonPage === p ? 'bg-purple-600 text-white' : 'border border-slate-200 text-slate-600 hover:bg-purple-50'}`}
+                                        >
+                                            {p}
+                                        </button>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        onClick={() => setBonPage(p => Math.min(totalBonPages, p + 1))}
+                                        disabled={bonPage >= totalBonPages}
+                                        className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-600 hover:bg-purple-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        Next ›
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
 
             {showBonModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 animate-fade-in" onClick={batalBonEdit}>
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 animate-slide-up" onClick={(e) => e.stopPropagation()}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-slide-up" onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-xl font-bold text-purple-900 mb-4 flex items-center justify-between">
-                            {bonEditId ? '✏️ Edit Catatan Bon' : '📝 Catat Bon Baru'}
+                            <span className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                                    <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                                    </svg>
+                                </div>
+                                {bonEditId ? 'Edit Catatan Bon' : 'Catat Bon Baru'}
+                            </span>
                             <button onClick={batalBonEdit} className="text-slate-400 hover:text-slate-600">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                         </h3>
                         <form onSubmit={handleBonSubmit} className="space-y-4">
                             <div>
-                                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Nama Debitur / Kreditur</label>
-                                <input type="text" value={bonForm.nama_pihak} onChange={(e) => setBonForm({...bonForm, nama_pihak: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm" required placeholder="Contoh: Toko Sinar Jaya / CV Maju Jaya"/>
+                                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Nama Debitur / Kreditur</label>
+                                <input type="text" value={bonForm.nama_pihak} onChange={(e) => setBonForm({...bonForm, nama_pihak: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-purple-500 focus:ring focus:ring-purple-200 focus:outline-none text-sm text-slate-800 placeholder:text-slate-400" required placeholder="Contoh: Toko Sinar Jaya / CV Maju Jaya"/>
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Jenis Bon</label>
-                                <select value={bonForm.jenis_bon} onChange={(e) => setBonForm({...bonForm, jenis_bon: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm bg-white">
-                                    <option value="PIUTANG">📥 Piutang (Pelanggan bayar ke kami)</option>
-                                    <option value="HUTANG">📤 Hutang (Kami bayar ke supplier)</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Nominal (Rp)</label>
-                                <input type="text" value={bonForm.nominal} onChange={(e) => handleNominalChange(e, 'bon')} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm font-semibold text-purple-900" required/>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Tanggal Jatuh Tempo</label>
-                                <input type="date" value={bonForm.tanggal_jatuh_tempo} onChange={(e) => setBonForm({...bonForm, tanggal_jatuh_tempo: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm" required/>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Keterangan</label>
-                                <textarea value={bonForm.keterangan} onChange={(e) => setBonForm({...bonForm, keterangan: e.target.value})} rows={2} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm" placeholder="Catatan tambahan..."/>
-                            </div>
-                            {bonEditId && (
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Status Pelunasan</label>
-                                    <select value={bonForm.status} onChange={(e) => setBonForm({...bonForm, status: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm bg-white">
-                                        <option value="BELUM_LUNAS">Belum Lunas</option>
-                                        <option value="LUNAS">Lunas</option>
-                                    </select>
-                                </div>
-                            )}
+                                                            <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Jenis Bon</label>
+                                                            <select value={bonForm.jenis_bon} onChange={(e) => setBonForm({...bonForm, jenis_bon: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-purple-500 focus:ring focus:ring-purple-200 focus:outline-none text-sm bg-white text-slate-800">
+                                                                <option value="PIUTANG">Piutang (Pelanggan bayar ke kami)</option>
+                                                                <option value="HUTANG">Hutang (Kami bayar ke supplier)</option>
+                                                            </select>
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Nominal (Rp)</label>
+                                                            <input type="text" value={bonForm.nominal} onChange={(e) => handleNominalChange(e, 'bon')} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-purple-500 focus:ring focus:ring-purple-200 focus:outline-none text-sm font-semibold text-purple-900 placeholder:text-slate-400" required/>
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Tanggal Jatuh Tempo</label>
+                                                            <input type="date" value={bonForm.tanggal_jatuh_tempo} onChange={(e) => setBonForm({...bonForm, tanggal_jatuh_tempo: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-purple-500 focus:ring focus:ring-purple-200 focus:outline-none text-sm text-slate-800" required/>
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Keterangan</label>
+                                                            <textarea value={bonForm.keterangan} onChange={(e) => setBonForm({...bonForm, keterangan: e.target.value})} rows={2} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-purple-500 focus:ring focus:ring-purple-200 focus:outline-none text-sm text-slate-800 placeholder:text-slate-400" placeholder="Catatan tambahan..."/>
+                                                        </div>
+                                                        {bonEditId && (
+                                                            <div>
+                                                                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Status Pelunasan</label>
+                                                                <select value={bonForm.status} onChange={(e) => setBonForm({...bonForm, status: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-purple-500 focus:ring focus:ring-purple-200 focus:outline-none text-sm bg-white text-slate-800">
+                                                                    <option value="BELUM_LUNAS">Belum Lunas</option>
+                                                                    <option value="LUNAS">Lunas</option>
+                                                                </select>
+                                                            </div>
+                                                        )}
                             <div className="flex gap-3 pt-2">
                                 <button type="button" onClick={batalBonEdit} className="flex-1 py-2.5 text-slate-700 font-bold rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors">Batal</button>
                                 <button type="submit" disabled={loading} className="flex-1 py-2.5 text-white font-bold rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-50 transition-colors">
@@ -904,6 +1246,10 @@ export default function BukuKasView() {
                                     <button onClick={() => window.print()} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-colors flex items-center gap-2">
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2h6zM12 12v6m0 0l3-3m-3 3l-3-3"/></svg>
                                         Cetak / PDF
+                                    </button>
+                                    <button onClick={handleExportMarkdown} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-colors flex items-center gap-2">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                        Markdown
                                     </button>
                                     <button onClick={() => setShowReportModal(null)} className="px-4 py-2 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors">Tutup</button>
                                 </div>

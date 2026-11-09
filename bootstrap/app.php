@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             'hitung-kesehatan',
             'api/analisis-ml',
+            'api/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

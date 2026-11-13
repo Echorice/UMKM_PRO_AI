@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\BukuKas;
+use App\Models\Stock;
+use App\Models\MutasiStock;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class BukuKasController extends Controller
@@ -71,12 +74,40 @@ class BukuKasController extends Controller
             'sumber_kas' => 'nullable|string|max:50',
             'nominal' => 'required|numeric|min:0',
             'kategori' => 'required|string|max:255',
+            // Opsional: integrasi stok (pengeluaran bahan baku)
+            'stock_id' => 'nullable|exists:stocks,id',
+            'jumlah' => 'nullable|numeric|min:0.01',
         ]);
 
         $validated['jenis'] = $this->resolveJenis($request);
         $validated['sumber_kas'] = (!empty($validated['sumber_kas'])) ? $validated['sumber_kas'] : 'KAS_TUNAI';
 
-        $transaksi = BukuKas::create($validated);
+        // Integrasi Stok: pengeluaran kategori bahan baku (atau ada stock_id + jumlah)
+        // otomatis mencatat mutasi masuk stok dalam satu DB transaction.
+        $withStok = isset($validated['stock_id']) && isset($validated['jumlah'])
+            && $validated['jenis'] === 'pengeluaran';
+
+        $transaksi = DB::transaction(function () use ($validated, $withStok) {
+            // Step A: Catat transaksi kas
+            $transaksi = BukuKas::create($validated);
+
+            // Step B: Otomatis mutasi masuk stok dengan transaksi_kas_id
+            if ($withStok) {
+                $stock = Stock::lockForUpdate()->findOrFail($validated['stock_id']);
+                $stock->increment('stok', $validated['jumlah']);
+
+                MutasiStock::create([
+                    'stok_id' => $stock->id,
+                    'jenis_mutasi' => 'masuk',
+                    'jumlah' => $validated['jumlah'],
+                    'tanggal_mutasi' => $validated['tanggal'],
+                    'keterangan' => 'Pembelian via Buku Kas: ' . $validated['keterangan'],
+                    'transaksi_kas_id' => $transaksi->id,
+                ]);
+            }
+
+            return $transaksi;
+        });
 
         return response()->json($transaksi, 201);
     }

@@ -59,8 +59,13 @@ export default function BukuKasView() {
         kategori: 'Penjualan',
         sumber_kas: 'KAS_TUNAI',
         keterangan: '',
-        nominal: ''
+        nominal: '',
+        stock_id: '',
+        jumlah: ''
     });
+
+    // Daftar stok untuk integrasi pembelian bahan baku (dropdown di form)
+    const [stokList, setStokList] = useState([]);
 
     const [bonForm, setBonForm] = useState({
         nama_pihak: '',
@@ -283,6 +288,11 @@ export default function BukuKasView() {
         fetchTransaksi();
         fetchBon();
         fetchDashboard();
+        // Load stok untuk integrasi pembelian bahan baku
+        fetch(`${API_BASE}/stok`, { headers: { Accept: 'application/json' } })
+            .then(r => r.ok ? r.json() : [])
+            .then(data => setStokList(Array.isArray(data) ? data : []))
+            .catch(err => console.error('Gagal memuat stok:', err));
     }, []);
 
     const formatRupiah = (angka) => {
@@ -425,7 +435,9 @@ export default function BukuKasView() {
             kategori: 'Penjualan',
             sumber_kas: 'KAS_TUNAI',
             keterangan: '',
-            nominal: ''
+            nominal: '',
+            stock_id: '',
+            jumlah: ''
         });
     };
 
@@ -433,11 +445,33 @@ export default function BukuKasView() {
         e.preventDefault();
         if (!form.keterangan || !form.nominal) return;
 
+        // Validasi integrasi stok: pembelian bahan baku wajib pilih barang + jumlah
+        const isBahanBaku = form.jenis_transaksi === 'Pengeluaran' && form.kategori === 'Bahan Baku';
+        if (isBahanBaku && (!form.stock_id || !form.jumlah || parseFloat(form.jumlah) <= 0)) {
+            showToast('Pilih barang yang dibeli dan jumlahnya (untuk kategori Bahan Baku)', 'error');
+            return;
+        }
+
         setLoading(true);
         const cleanNominal = Number(form.nominal.toString().replace(/\./g, ''));
 
         const url = editId ? `${API_BASE}/transaksi/${editId}` : `${API_BASE}/transaksi`;
         const method = editId ? 'PUT' : 'POST';
+
+        const payload = {
+            tanggal: form.tanggal,
+            jenis_transaksi: form.jenis_transaksi,
+            kategori: form.kategori,
+            sumber_kas: form.sumber_kas,
+            keterangan: form.keterangan,
+            nominal: cleanNominal
+        };
+
+        // Kirim info stok hanya saat create + bahan baku (backend auto-mutasi & catat transaksi_kas_id)
+        if (!editId && isBahanBaku) {
+            payload.stock_id = form.stock_id;
+            payload.jumlah = parseFloat(form.jumlah);
+        }
 
         try {
             const response = await fetch(url, {
@@ -446,25 +480,24 @@ export default function BukuKasView() {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
                 },
-                body: JSON.stringify({
-                    tanggal: form.tanggal,
-                    jenis_transaksi: form.jenis_transaksi,
-                    kategori: form.kategori,
-                    sumber_kas: form.sumber_kas,
-                    keterangan: form.keterangan,
-                    nominal: cleanNominal
-                })
+                body: JSON.stringify(payload)
             });
 
             if (response.ok) {
-                showToast(editId ? 'Transaksi diperbarui' : 'Transaksi disimpan', 'success');
+                showToast(
+                    editId ? 'Transaksi diperbarui' : (!editId && isBahanBaku ? 'Transaksi disimpan + stok bertambah' : 'Transaksi disimpan'),
+                    'success'
+                );
                 fetchTransaksi();
                 batalEdit();
             } else {
-                throw new Error(`HTTP ${response.status}`);
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.message || errData.error || `HTTP ${response.status}`);
             }
         } catch (err) {
-            const msg = editId ? 'Gagal memperbarui transaksi' : 'Gagal menyimpan transaksi';
+            const msg = (err.message && err.message.startsWith('HTTP'))
+                ? (editId ? 'Gagal memperbarui transaksi' : 'Gagal menyimpan transaksi')
+                : err.message;
             console.error(msg, err);
             showToast(msg, 'error');
         } finally {
@@ -774,6 +807,42 @@ export default function BukuKasView() {
                                     ))}
                                 </select>
                             </div>
+                            {form.jenis_transaksi === 'Pengeluaran' && form.kategori === 'Bahan Baku' && !editId && (
+                                <>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Barang Dibeli</label>
+                                        <select
+                                            value={form.stock_id}
+                                            onChange={(e) => setForm({ ...form, stock_id: e.target.value })}
+                                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm bg-white text-slate-900"
+                                            required
+                                        >
+                                            <option value="">— Pilih barang —</option>
+                                            {stokList.map((s) => (
+                                                <option key={s.id} value={s.id}>
+                                                    {s.nama_barang} (sisa {s.stok} {s.satuan || ''})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Jumlah Masuk</label>
+                                        <input
+                                            type="number"
+                                            min="0.01"
+                                            step="any"
+                                            value={form.jumlah}
+                                            onChange={(e) => setForm({ ...form, jumlah: e.target.value })}
+                                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm text-slate-900"
+                                            placeholder="mis. 50"
+                                            required
+                                        />
+                                        <p className="mt-1 text-[11px] text-slate-500">
+                                            Stok bertambah otomatis &amp; riwayat tercatat di mutasi stok.
+                                        </p>
+                                    </div>
+                                </>
+                            )}
                             <div className="md:col-span-2">
                                 <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Keterangan</label>
                                 <input type="text" value={form.keterangan} onChange={(e) => setForm({...form, keterangan: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm text-slate-900" required/>

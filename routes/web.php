@@ -28,18 +28,14 @@ Route::get('/hasil-penilaian', function () {
 
 Route::post('/hitung-kesehatan', [UmkmHealthController::class, 'store']);
 Route::post('/api/analisis-ml', [UmkmHealthController::class, 'store']);
+Route::post('/api/simulasi-kesehatan', [UmkmHealthController::class, 'simulate']);
+Route::get('/api/analisis-latest', [UmkmHealthController::class, 'apiLatest']);
 
 // 2. Rute Halaman Buku Kas
 use App\Http\Controllers\BukuKasController;
 
 // Rute Halaman Buku Kas (Menampilkan data)
 Route::get('/buku-kas', [BukuKasController::class, 'index']);
-
-// API Routes untuk Frontend (CRUD via fetch)
-Route::get('/api/transaksi', [BukuKasController::class, 'apiIndex']);
-Route::post('/api/transaksi', [BukuKasController::class, 'store']);
-Route::put('/api/transaksi/{id}', [BukuKasController::class, 'update']);
-Route::delete('/api/transaksi/{id}', [BukuKasController::class, 'destroy']);
 
 // Rute untuk Menyimpan Transaksi Buku Kas
 Route::post('/buku-kas', [BukuKasController::class, 'store']);
@@ -65,9 +61,18 @@ Route::prefix('api/stock')->group(function () {
     Route::post('/', [StockController::class, 'store']);
     Route::put('/{id}', [StockController::class, 'update']);
     Route::delete('/{id}', [StockController::class, 'destroy']);
-    Route::post('/kurangi', [StockController::class, 'kurangiStok']);
-    Route::post('/tambah', [StockController::class, 'tambahStok']);
-    Route::get('/low-stock', [StockController::class, 'getLowStock']);
+    Route::get('/riwayat/{id}', [StockController::class, 'riwayat']);
+});
+
+// 4. Rute Utama Manajemen Mutasi Stok Sesuai Spesifikasi Baru
+Route::prefix('api/stok')->group(function () {
+    Route::get('/', [StockController::class, 'index']);
+    Route::post('/', [StockController::class, 'store']);
+    Route::put('/{stock}', [StockController::class, 'update']);
+    Route::delete('/{stock}', [StockController::class, 'destroy']);
+    Route::post('/mutasi', [StockController::class, 'mutasi']);
+    Route::get('/riwayat/{stok_id}', [StockController::class, 'riwayat']);
+    Route::get('/alert', [StockController::class, 'alert']);
 });
 
 Route::get('/manajemen-stok', function () {

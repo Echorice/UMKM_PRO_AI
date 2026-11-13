@@ -20,8 +20,23 @@ export default function DashboardView() {
         }
     };
 
+    const [lowStok, setLowStok] = useState([]);
+
+    const fetchLowStok = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/stok/alert`, { headers: { Accept: 'application/json' } });
+            if (res.ok) {
+                const data = await res.json();
+                setLowStok(Array.isArray(data) ? data : []);
+            }
+        } catch (error) {
+            console.error('Gagal fetch low stok:', error);
+        }
+    };
+
     useEffect(() => {
         fetchDashboard();
+        fetchLowStok();
     }, []);
 
     const fmt = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val || 0);
@@ -117,6 +132,29 @@ export default function DashboardView() {
     return (
         <div className="bg-[#0E0B1D] min-h-screen p-6 md:p-8 text-slate-100">
             <div className="max-w-7xl mx-auto space-y-8">
+
+                {/* ===== ALERT STOK MENIPIS ===== */}
+                {lowStok.length > 0 && (
+                    <div className="bg-rose-600/95 border-2 border-rose-400 rounded-2xl p-4 md:p-5 shadow-xl">
+                        <div className="flex items-center gap-3 mb-2">
+                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                            <p className="text-white font-black text-sm md:text-base uppercase tracking-wide">
+                                Peringatan Stok Menipis ({lowStok.length} barang)
+                            </p>
+                        </div>
+                        <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                            {lowStok.map((s) => (
+                                <li key={s.id} className="bg-white/15 border border-white/30 rounded-xl px-3 py-2 text-sm font-semibold text-white flex items-center justify-between gap-2">
+                                    <span>{s.nama_barang}</span>
+                                    <span className="text-xs bg-white text-rose-700 px-2 py-0.5 rounded-full font-black whitespace-nowrap">
+                                        Sisa {parseFloat(s.stok)} {s.satuan || ''}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                        <p className="mt-2 text-xs font-bold text-rose-100">Segera restok sebelum mencapai titik pemesanan ulang.</p>
+                    </div>
+                )}
 
                 {/* ===== 1. HEADER: UMKM NAME + ML ANALYSIS ===== */}
                 <div className="animate-slideUp bg-[#2A1E4D] rounded-3xl shadow-2xl border border-[#3A3A52] p-6 md:p-8 relative overflow-hidden">

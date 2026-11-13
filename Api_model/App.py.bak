@@ -1,0 +1,152 @@
+import os
+
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import joblib
+import pandas as pd
+
+# Deklarasi awal aplikasi Flask (Ini yang hilang sebelumnya)
+app = Flask(__name__)
+CORS(app)
+
+# Load model Machine Learning
+model_path = os.path.join(os.path.dirname(__file__), 'model_rf_keuangan.pkl')
+model = joblib.load(model_path)
+
+@app.route('/hitung-kesehatan', methods=['POST'])
+def hitung_kesehatan():
+    try:
+        # 1. Tangkap paket data JSON dari Home.jsx / AnalisisAI.jsx (support snake_case dan camelCase)
+        data = request.get_json()
+        nama_usaha = data.get('nama_usaha') or data.get('namaUsaha') or 'Tanpa Nama'
+
+        # 2. Ekstrak angka mentah dari frontend
+        current_assets = float(data.get('current_assets') or data.get('currentAssets') or 0)
+        current_liabilities = float(data.get('current_liabilities') or data.get('currentLiabilities') or 0)
+        total_debt = float(data.get('total_debt') or data.get('totalDebt') or 0)
+        total_equity = float(data.get('total_equity') or data.get('totalEquity') or 0)
+        net_profit = float(data.get('net_profit') or data.get('netProfit') or 0)
+        total_assets = float(data.get('total_assets') or data.get('totalAssets') or 0)
+        sales = float(data.get('sales') or 0)
+        cash_inflow = float(data.get('cash_inflow') or data.get('cashInflow') or 0)
+        cash_outflow = float(data.get('cash_outflow') or data.get('cashOutflow') or 0)
+        previous_revenue = float(data.get('previous_revenue') or data.get('previousRevenue') or 0)
+
+        # 3. Hitung Rasio Keuangan (dengan pencegahan error pembagian dengan nol)
+        cr = current_assets / current_liabilities if current_liabilities != 0 else 0
+        der = total_debt / total_equity if total_equity != 0 else 0
+        roa = net_profit / total_assets if total_assets != 0 else 0
+        npm = net_profit / sales if sales != 0 else 0
+        tato = sales / total_assets if total_assets != 0 else 0
+        operating_cash_flow = cash_inflow - cash_outflow
+        revenue_growth = ((sales - previous_revenue) / previous_revenue) if previous_revenue != 0 else 0
+
+        # 4. Susun fitur persis seperti yang diminta oleh model Colab Anda
+        fitur_model = {
+            'CR': cr,
+            'DER': der,
+            'ROA': roa,
+            'NPM': npm,
+            'TATO': tato,
+            'Operating_Cash_Flow': operating_cash_flow,
+            'Revenue_Growth': revenue_growth
+        }
+
+        # 5. Konversi ke DataFrame dan lakukan prediksi
+        df_input = pd.DataFrame([fitur_model])
+        hasil_prediksi = model.predict(df_input)[0]
+        
+        # Probabilitas / Confidence jika tersedia
+        confidence = 0.85
+        try:
+            proba = model.predict_proba(df_input)[0]
+            confidence = float(max(proba))
+        except Exception:
+            pass
+
+        # 6. Komputasi Skor Intensitas 0-100 Berdasarkan Threshold & Aturan Baru
+        # - Intensitas Risiko/Hutang (DER): Ambang batas maksimal = 2.0x, Rumus: (DER / 2.0) * 100
+        risk_intensity = min(100.0, max(0.0, (der / 2.0) * 100))
+        leverage_score = max(0.0, 100.0 - risk_intensity) # leverage health score (inverse of risk)
+
+        # - Intensitas Profitabilitas (ROA & NPM): Ambang batas maksimal = 15% (0.15) dan 20% (0.20)
+        roa_pct = roa * 100
+        npm_pct = npm * 100
+        roa_score = min(100.0, max(0.0, (roa_pct / 15.0) * 100))
+        npm_score = min(100.0, max(0.0, (npm_pct / 20.0) * 100))
+        profitability_intensity = (roa_score + npm_score) / 2.0
+        profitability_score = profitability_intensity
+
+        # - Intensitas Likuiditas (CR): Ambang batas maksimal = 3.0x
+        liquidity_intensity = min(100.0, max(0.0, (cr / 3.0) * 100))
+        liquidity_score = liquidity_intensity
+
+        # - Intensitas Efisiensi & Pertumbuhan (TAT & Rev Growth): Ambang batas = 2.0x (TAT) dan 20% (Growth)
+        growth_pct = revenue_growth * 100
+        tat_score = min(100.0, max(0.0, (tato / 2.0) * 100))
+        growth_score = min(100.0, max(0.0, (growth_pct / 20.0) * 100))
+        efficiency_intensity = (tat_score + growth_score) / 2.0
+        efficiency_score = efficiency_intensity
+
+        # 7. Diagnosa Ketidakseimbangan (Imbalance Check)
+        imbalance_diagnostics = []
+        if risk_intensity > 75 and profitability_intensity < 40:
+            imbalance_diagnostics.append("Overleveraged (Usaha didorong oleh hutang, bukan keuntungan)")
+        if liquidity_intensity > 80 and efficiency_intensity < 40:
+            imbalance_diagnostics.append("Idle Asset (Terlalu banyak kas tunai/aset lancar yang menganggur dan tidak diputar menjadi penjualan)")
+        if profitability_intensity > risk_intensity and profitability_intensity > 60:
+            imbalance_diagnostics.append("Dominasi Laba Sehat")
+
+        if not imbalance_diagnostics:
+            imbalance_diagnostics.append("Struktur Keuangan Seimbang")
+
+        # 8. Rekomendasi Tindakan AI
+        recommendations = []
+        if risk_intensity > 75:
+            recommendations.append("Kurangi beban hutang berbunga tinggi atau tingkatkan ekuitas untuk menekan DER di bawah 2.0x.")
+        if liquidity_intensity < 40:
+            recommendations.append("Perkuat modal kerja dan percepat penagihan piutang untuk meningkatkan Current Ratio.")
+        if profitability_intensity < 40:
+            recommendations.append("Lakukan efisiensi biaya operasional dan optimalkan margin laba penjualan.")
+        if efficiency_intensity < 40:
+            recommendations.append("Tingkatkan perputaran aset (TATO) dengan utilisasi aset yang lebih produktif.")
+        if not recommendations:
+            recommendations.append("Pertahankan kinerja keuangan yang stabil dan lanjutkan ekspansi bisnis yang terukur.")
+
+        status_kesehatan = 'Sehat (Keuangan Stabil)' if hasil_prediksi == 1 else 'Beresiko (Perlu Perhatian)'
+
+        return jsonify({
+            'status': 'sukses',
+            'nama_usaha': nama_usaha,
+            'hasil_prediksi': int(hasil_prediksi),
+            'prediction': status_kesehatan,
+            'ai_prediction': status_kesehatan,
+            'confidence': confidence,
+            'profitability_score': round(profitability_score, 1),
+            'liquidity_score': round(liquidity_score, 1),
+            'leverage_score': round(leverage_score, 1),
+            'efficiency_score': round(efficiency_score, 1),
+            'profitability_intensity': round(profitability_intensity, 1),
+            'liquidity_intensity': round(liquidity_intensity, 1),
+            'risk_intensity': round(risk_intensity, 1),
+            'efficiency_intensity': round(efficiency_intensity, 1),
+            'imbalance_diagnostics': imbalance_diagnostics,
+            'recommendations': recommendations,
+            'ratios': {
+                'CR': round(cr, 2),
+                'DER': round(der, 2),
+                'ROA': round(roa_pct, 2),
+                'NPM': round(npm_pct, 2),
+                'TATO': round(tato, 2),
+                'Revenue_Growth': round(growth_pct, 2)
+            },
+            'total_debt': total_debt,
+            'total_equity': total_equity
+        })
+
+    except Exception as e:
+        return jsonify({'status': 'error', 'pesan': str(e)}), 500
+
+# Baris ini wajib ada di paling bawah untuk menjalankan server
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)

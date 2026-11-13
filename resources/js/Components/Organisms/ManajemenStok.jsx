@@ -9,6 +9,8 @@ export default function ManajemenStok() {
     const [showModal, setShowModal] = useState(false);
     const [restockModal, setRestockModal] = useState(null);
     const [restockQty, setRestockQty] = useState('');
+    // jenis mutasi: 'masuk' (restock) atau 'keluar' (pemakaian)
+    const [mutasiJenis, setMutasiJenis] = useState('masuk');
 
     const [form, setForm] = useState({
         nama_barang: '',
@@ -21,12 +23,14 @@ export default function ManajemenStok() {
     const fetchStocks = async () => {
         setLoading(true);
         try {
-            const res = await axios.get('/api/stock');
+            const res = await axios.get('/api/stok');
             setStocks(res.data);
-            const lowRes = await axios.get('/api/stock/low-stock');
+            const lowRes = await axios.get('/api/stok/alert');
             setLowStocks(lowRes.data);
+            return res.data;
         } catch (e) {
             console.error(e);
+            return null;
         } finally {
             setLoading(false);
         }
@@ -39,35 +43,50 @@ export default function ManajemenStok() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            await axios.post('/api/stock', form);
+            await axios.post('/api/stok', form);
             setShowModal(false);
             setForm({ nama_barang: '', kategori: 'Bahan Baku', stok: '', satuan: 'Kg', reorder_point: '5' });
             fetchStocks();
         } catch (e) {
-            alert('Gagal menambah barang');
+            const msg = e.response?.data?.message || e.response?.data?.error || 'Gagal menambah barang';
+            alert(msg);
         }
     };
 
-    const handleRestock = async (e) => {
+    const handleMutasi = async (e) => {
         e.preventDefault();
         if (!restockModal) return;
+        const jumlah = parseFloat(restockQty);
+        if (!Number.isFinite(jumlah) || jumlah <= 0) {
+            alert('Jumlah harus > 0');
+            return;
+        }
+        if (mutasiJenis === 'keluar' && jumlah > parseFloat(restockModal.stok)) {
+            alert('Stok tidak cukup');
+            return;
+        }
         try {
-            await axios.post('/api/stock/tambah', {
-                stock_id: restockModal.id,
-                jumlah: parseFloat(restockQty)
+            await axios.post('/api/stok/mutasi', {
+                stok_id: restockModal.id,
+                jenis_mutasi: mutasiJenis,   // 'masuk' | 'keluar'
+                jumlah
             });
             setRestockModal(null);
             setRestockQty('');
             fetchStocks();
         } catch (e) {
-            alert('Gagal restock');
+            const msg = e.response?.data?.error || e.response?.data?.message || 'Gagal melakukan mutasi stok';
+            alert(msg);
+            // sinkronkan stok modal dengan data server agar tidak stale
+            const list = await fetchStocks();
+            if (list) setRestockModal(prev => list.find(s => s.id === prev?.id) || prev);
         }
     };
 
     const handleDelete = async (id) => {
         if (!confirm('Hapus item stok ini?')) return;
         try {
-            await axios.delete(`/api/stock/${id}`);
+            await axios.delete(`/api/stok/${id}`);
             fetchStocks();
         } catch (e) {
             alert('Gagal menghapus');
@@ -162,11 +181,18 @@ export default function ManajemenStok() {
                                             </td>
                                             <td className="p-4 text-center flex items-center justify-center gap-2">
                                                 <button
-                                                    onClick={() => setRestockModal(item)}
+                                                    onClick={() => { setMutasiJenis('masuk'); setRestockQty(''); setRestockModal(item); }}
                                                     className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition"
                                                     title="Restock (+)"
                                                 >
                                                     <RefreshCw className="w-3.5 h-3.5" /> Restock (+)
+                                                </button>
+                                                <button
+                                                    onClick={() => { setMutasiJenis('keluar'); setRestockQty(''); setRestockModal(item); }}
+                                                    className="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition"
+                                                    title="Stok Keluar (−)"
+                                                >
+                                                    <RefreshCw className="w-3.5 h-3.5 -scale-x-100" /> Keluar (−)
                                                 </button>
                                                 <button
                                                     onClick={() => handleDelete(item.id)}
@@ -273,13 +299,18 @@ export default function ManajemenStok() {
             {restockModal && (
                 <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="bg-[#1E1939] border border-[#3A3A52] rounded-2xl w-full max-w-sm p-6 shadow-2xl">
-                        <h3 className="text-xl font-bold text-white mb-2">Restock Barang</h3>
+                        <h3 className="text-xl font-bold text-white mb-2">
+                            {mutasiJenis === 'keluar' ? 'Stok Keluar' : 'Restock Barang'}
+                        </h3>
                         <p className="text-slate-400 text-sm mb-4">
-                            Tambah jumlah stok untuk <span className="text-white font-semibold">{restockModal.nama_barang}</span> ({restockModal.satuan}).
+                            {mutasiJenis === 'keluar' ? 'Kurangi jumlah stok untuk ' : 'Tambah jumlah stok untuk '}
+                            <span className="text-white font-semibold">{restockModal.nama_barang}</span> ({restockModal.satuan}).
                         </p>
-                        <form onSubmit={handleRestock} className="space-y-4">
+                        <form onSubmit={handleMutasi} className="space-y-4">
                             <div>
-                                <label className="block text-sm text-slate-300 mb-1">Jumlah Tambahan</label>
+                                <label className="block text-sm text-slate-300 mb-1">
+                                    {mutasiJenis === 'keluar' ? 'Jumlah Pengurangan' : 'Jumlah Tambahan'}
+                                </label>
                                 <input
                                     type="number"
                                     step="any"
@@ -290,6 +321,14 @@ export default function ManajemenStok() {
                                     placeholder="Contoh: 20"
                                     className="w-full bg-[#0E0B1D] border border-[#3A3A52] rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500"
                                 />
+                                <div className="text-xs text-slate-400 mt-2 space-y-1">
+                                    <p>Stok tersedia: <span className="font-semibold text-white">{restockModal.stok} {restockModal.satuan}</span></p>
+                                    {mutasiJenis === 'keluar' && restockQty !== '' && (
+                                        <p>Sisa setelah pengurangan: <span className="font-semibold text-emerald-400">
+                                            {Math.max(0, parseFloat(restockModal.stok) - (parseFloat(restockQty) || 0))} {restockModal.satuan}
+                                        </span></p>
+                                    )}
+                                </div>
                             </div>
                             <div className="flex justify-end gap-3 pt-2">
                                 <button
@@ -301,9 +340,9 @@ export default function ManajemenStok() {
                                 </button>
                                 <button
                                     type="submit"
-                                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl text-sm font-semibold transition"
+                                    className={`text-white px-5 py-2 rounded-xl text-sm font-semibold transition ${mutasiJenis === 'keluar' ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}
                                 >
-                                    Tambah Stok
+                                    {mutasiJenis === 'keluar' ? 'Kurangi Stok' : 'Tambah Stok'}
                                 </button>
                             </div>
                         </form>

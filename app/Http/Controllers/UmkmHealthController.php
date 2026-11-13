@@ -136,28 +136,43 @@ class UmkmHealthController extends Controller
         */
        protected function buildResponse(array $ratios, array $insights, array $mlResponse, string $aiPrediction, array $raw = []): array
        {
-           $profitabilityScore = min(100, max(0, (int)(($ratios['roa'] + 20) * 2.5)));
-           $liquidityScore     = min(100, max(0, (int)($ratios['currentRatio'] * 50)));
-           $leverageScore      = min(100, max(0, (int)(max(0, (3 - $ratios['der'])) * 33.3)));
-           $efficiencyScore    = min(100, max(0, (int)($ratios['tat'] * 30)));
-           $avgScore           = ($profitabilityScore + $liquidityScore + $leverageScore + $efficiencyScore) / 4;
-           $prediction         = $avgScore >= 70 ? 'SEHAT' : ($avgScore >= 50 ? 'RISIKO' : 'BERESIKO');
+           // --- Bar intensity (0-100), threshold ideal sebagai pembagi 100% ---
+           $barCr     = min(100, max(0, ($ratios['currentRatio'] / 5.0) * 100));
+           $barDer    = min(100, max(0, ($ratios['der'] / 1.5) * 100));
+           $barRoa    = min(100, max(0, ($ratios['roa'] / 15.0) * 100));
+           $barNpm    = min(100, max(0, ($ratios['npm'] / 20.0) * 100));
+           $barTat    = min(100, max(0, ($ratios['tat'] / 1.5) * 100));
+           $barGrowth = min(100, max(0, ($ratios['revGrowth'] / 20.0) * 100));
 
-           // 6 normalized intensity scores (0-100) for histogram
-           $riskIntensity         = min(100, max(0, ($ratios['der'] / 2.0) * 100));
-           $profitabilityIntensity = min(100, max(0, ((($ratios['roa'] / 15) * 100) + (($ratios['npm'] / 20) * 100)) / 2));
-           $liquidityIntensity    = min(100, max(0, ($ratios['currentRatio'] / 3.0) * 100));
-           $efficiencyIntensity  = min(100, max(0, ((($ratios['tat'] / 2.0) * 100) + (($ratios['revGrowth'] / 20) * 100)) / 2));
+           // --- 4 skor kartu, turunan dari bar di atas ---
+           $scoreLiquidity     = round($barCr);
+           $scoreLeverage      = round(100 - $barDer);          // inverted: hutang tinggi = skor rendah
+           $scoreProfitability = round(($barRoa + $barNpm) / 2);
+           $scoreEfficiency    = round(($barTat + $barGrowth) / 2);
 
-           // Imbalance diagnostics: combine rule-engine + Flask ML
+           $avgScore = ($scoreProfitability + $scoreLiquidity + $scoreLeverage + $scoreEfficiency) / 4;
+           // Kartu status ikut prediksi ML; fallback avg skor bila ML offline/kosong
+           $mlPred      = is_string($aiPrediction) && trim($aiPrediction) !== '' ? $aiPrediction : null;
+           $prediction  = $mlPred ?? ($avgScore >= 70 ? 'SEHAT' : ($avgScore >= 50 ? 'RISIKO' : 'BERESIKO'));
+
+           // Intensity scores (0-100) untuk histogram & kartu
+           $riskIntensity         = $barDer;
+           $profitabilityIntensity = ($barRoa + $barNpm) / 2;
+           $liquidityIntensity    = $barCr;
+           $efficiencyIntensity   = ($barTat + $barGrowth) / 2;
+
+           // Imbalance diagnostics: rule-engine berbasis bar intensity + merge ML Flask
            $imbalance = [];
-           if ($riskIntensity > 75 && $profitabilityIntensity < 40) {
+           $profitBarAvg = ($barRoa + $barNpm) / 2;
+           $effBarAvg    = ($barTat + $barGrowth) / 2;
+
+           if ($barDer > 75 && $profitBarAvg < 40) {
                $imbalance[] = 'Overleveraged (Usaha didorong oleh hutang, bukan keuntungan)';
            }
-           if ($liquidityIntensity > 80 && $efficiencyIntensity < 40) {
+           if ($barCr > 80 && $effBarAvg < 40) {
                $imbalance[] = 'Idle Asset (Terlalu banyak kas/aset lancar menganggur)';
            }
-           if ($profitabilityIntensity > $riskIntensity && $profitabilityIntensity > 60) {
+           if ($profitBarAvg > $barDer && $profitBarAvg > 60) {
                $imbalance[] = 'Dominasi Laba Sehat';
            }
 
@@ -174,12 +189,13 @@ class UmkmHealthController extends Controller
 
            return [
             'status'               => 'sukses',
-            'profitability_score'  => $profitabilityScore,
-            'liquidity_score'      => $liquidityScore,
-            'leverage_score'       => $leverageScore,
-            'efficiency_score'     => $efficiencyScore,
+            'profitability_score'  => $scoreProfitability,
+            'liquidity_score'      => $scoreLiquidity,
+            'leverage_score'       => $scoreLeverage,
+            'efficiency_score'     => $scoreEfficiency,
             'prediction'           => $prediction === 'BERESIKO' ? 'Beresiko (Perlu Perhatian)' : $prediction,
-            'confidence'           => 0.89,
+            'health_status'        => $avgScore >= 80 ? 'Sehat' : ($avgScore >= 50 ? 'Beresiko' : 'Krisis'),
+            'confidence'           => round($avgScore, 1),
             'ai_prediction'        => $aiPrediction,
             'current_ratio'        => $ratios['currentRatio'],
             'debt_equity_ratio'    => $ratios['der'],
@@ -191,19 +207,31 @@ class UmkmHealthController extends Controller
             'insights'             => $insights,
             'recommendations'      => $insights,
             'raw'                  => $raw,
-            // Intensity scores at top level (Flask-compatible format)
+            // New: intensity scores for histogram (flat at top level)
             'profitability_intensity' => round($profitabilityIntensity, 1),
             'liquidity_intensity'     => round($liquidityIntensity, 1),
             'risk_intensity'          => round($riskIntensity, 1),
             'efficiency_intensity'    => round($efficiencyIntensity, 1),
-            // New: intensity scores for histogram (nested)
+            // Backward-compat nested intensity_scores for histogram
             'intensity_scores' => [
                 'risk_intensity'          => round($riskIntensity, 1),
                 'profitability_intensity' => round($profitabilityIntensity, 1),
                 'liquidity_intensity'     => round($liquidityIntensity, 1),
                 'efficiency_intensity'    => round($efficiencyIntensity, 1),
             ],
-            // New: imbalance diagnostics
+            // New: bar_chart values for frontend histogram (nested)
+            'bar_chart' => [
+                'cr' => round($barCr, 1), 'der' => round($barDer, 1), 'roa' => round($barRoa, 1),
+                'npm' => round($barNpm, 1), 'tat' => round($barTat, 1), 'growth' => round($barGrowth, 1),
+            ],
+            // New: scores breakdown (flat at top level)
+            'health_score' => (float) ($raw['health_score'] ?? round($avgScore, 2)),
+            'scores' => [
+                'profitability' => $scoreProfitability, 'liquidity' => $scoreLiquidity,
+                'leverage' => $scoreLeverage, 'efficiency' => $scoreEfficiency,
+                'average' => round($avgScore, 1),
+            ],
+            // Imbalance diagnostics
             'imbalance' => !empty($imbalance) ? $imbalance : ['Struktur Keuangan Seimbang'],
             // Debt vs Equity for pie chart (already in raw, surfaced here)
             'total_debt'   => $raw['total_debt'] ?? ($ratios['der'] * ($raw['total_equity'] ?? 1)),
@@ -246,6 +274,7 @@ class UmkmHealthController extends Controller
             'total_equity'        => (float)$latest->total_equity,
             'current_assets'      => (float)$latest->current_assets,
             'current_liabilities' => (float)$latest->current_liabilities,
+            'health_score'        => (float)$latest->health_score,
         ]));
     }
 
@@ -259,6 +288,20 @@ class UmkmHealthController extends Controller
         $insights = $this->getInsights($ratios);
         $mlResponse = $this->callMlApi($ratios, $data);
         $aiPrediction = $mlResponse['ai_prediction'] ?? 'Sehat (Keuangan Stabil)';
+
+        // Hitung 4 skor bar dari bar intensity (logikanya identik dengan buildResponse)
+        $barCr     = min(100, max(0, ($ratios['currentRatio'] / 5.0) * 100));
+        $barDer    = min(100, max(0, ($ratios['der'] / 1.5) * 100));
+        $barRoa    = min(100, max(0, ($ratios['roa'] / 15.0) * 100));
+        $barNpm    = min(100, max(0, ($ratios['npm'] / 20.0) * 100));
+        $barTat    = min(100, max(0, ($ratios['tat'] / 1.5) * 100));
+        $barGrowth = min(100, max(0, ($ratios['revGrowth'] / 20.0) * 100));
+
+        $scoreLiquidity     = round($barCr);
+        $scoreLeverage      = round(100 - $barDer);
+        $scoreProfitability = round(($barRoa + $barNpm) / 2);
+        $scoreEfficiency    = round(($barTat + $barGrowth) / 2);
+        $avgScore = ($scoreProfitability + $scoreLiquidity + $scoreLeverage + $scoreEfficiency) / 4;
 
         UmkmHealth::create([
             'nama_usaha'          => $data['namaUsaha'] ?? 'UMKM',
@@ -279,6 +322,7 @@ class UmkmHealthController extends Controller
             'tat'                 => $ratios['tat'],
             'ocf'                 => $ratios['ocf'],
             'rev_growth'          => $ratios['revGrowth'],
+            'health_score'        => round($avgScore, 2),
             'ai_prediction'       => $aiPrediction,
         ]);
 
@@ -289,6 +333,7 @@ class UmkmHealthController extends Controller
             'total_equity'        => $data['totalEquity'] ?? 0,
             'current_assets'      => $data['currentAssets'] ?? 0,
             'current_liabilities' => $data['currentLiabilities'] ?? 0,
+            'health_score'        => round($avgScore, 2),
         ]));
     }
 

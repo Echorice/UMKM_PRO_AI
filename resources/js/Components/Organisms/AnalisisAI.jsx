@@ -133,30 +133,48 @@ export default function AnalisisAI() {
 
     const getHealthColor = (score) => {
         if (score >= 80) return 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30';
-        if (score >= 60) return 'text-amber-400 bg-amber-500/20 border-amber-500/30';
+        if (score >= 50 && score < 80) return 'text-amber-400 bg-amber-500/20 border-amber-500/30';
         return 'text-rose-400 bg-rose-500/20 border-rose-500/30';
     };
 
     const getHealthStatus = (score) => {
-        if (score >= 80) return 'SEHAT';
-        if (score >= 60) return 'RISIKO';
-        return 'KRITIS';
+        if (score >= 80) return 'Sehat';
+        if (score >= 50 && score < 80) return 'Beresiko';
+        return 'Krisis';
     };
 
-    // Prepare data for 6-Ratio Horizontal Histogram using intensity scores (0-100)
-    const ratioHistogramData = result ? [
-        { name: 'CR (Liquidity)', value: Number(result.intensity_scores?.liquidity_intensity ?? result.liquidity_intensity ?? result.liquidity_score ?? 0), fill: '#8B7CC7' },
-        { name: 'DER (Risk)', value: Number(result.intensity_scores?.risk_intensity ?? result.risk_intensity ?? result.leverage_score ?? 0), fill: '#EF4444' },
-        { name: 'ROA (Profit)', value: Number(result.intensity_scores?.profitability_intensity ?? result.profitability_intensity ?? result.profitability_score ?? 0), fill: '#10B981' },
-        { name: 'NPM (Profit)', value: Number(result.intensity_scores?.profitability_intensity ?? result.profitability_intensity ?? result.profitability_score ?? 0), fill: '#F59E0B' },
-        { name: 'TAT (Efficiency)', value: Number(result.intensity_scores?.efficiency_intensity ?? result.efficiency_intensity ?? result.efficiency_score ?? 0), fill: '#3B82F6' },
-        { name: 'Growth (Efficiency)', value: Number(result.intensity_scores?.efficiency_intensity ?? result.efficiency_intensity ?? result.efficiency_score ?? 0), fill: '#EC4899' },
-    ] : [];
+    const scores = {
+        profitability: Number(result?.scores?.profitability ?? result?.profitability_score ?? 0),
+        liquidity: Number(result?.scores?.liquidity ?? result?.liquidity_score ?? 0),
+        leverage: Number(result?.scores?.leverage ?? result?.leverage_score ?? 0),
+        efficiency: Number(result?.scores?.efficiency ?? result?.efficiency_score ?? 0),
+    };
+
+    // Rerata 4 pilar: kolom DB (health_score) > scores.average dari API > hitung lokal
+    const avgScore = typeof result?.health_score === 'number' ? result.health_score
+        : typeof result?.scores?.average === 'number' ? result.scores.average
+        : (scores.profitability + scores.liquidity + scores.leverage + scores.efficiency) / 4;
+
+    const ratioHistogramData = result?.bar_chart ? [
+        { name: 'CR (Liquidity)', value: Number(result.bar_chart.cr ?? 0), fill: '#8B7CC7' },
+        { name: 'DER (Risk)', value: Number(result.bar_chart.der ?? 0), fill: '#EF4444' },
+        { name: 'ROA (Profit)', value: Number(result.bar_chart.roa ?? 0), fill: '#10B981' },
+        { name: 'NPM (Profit)', value: Number(result.bar_chart.npm ?? 0), fill: '#F59E0B' },
+        { name: 'TAT (Efficiency)', value: Number(result.bar_chart.tat ?? 0), fill: '#3B82F6' },
+        { name: 'Growth (Efficiency)', value: Number(result.bar_chart.growth ?? 0), fill: '#EC4899' },
+    ] : [
+        { name: 'CR (Liquidity)', value: Number(result?.intensity_scores?.liquidity_intensity ?? result?.liquidity_intensity ?? result?.liquidity_score ?? 0), fill: '#8B7CC7' },
+        { name: 'DER (Risk)', value: Number(result?.intensity_scores?.risk_intensity ?? result?.risk_intensity ?? result?.leverage_score ?? 0), fill: '#EF4444' },
+        { name: 'ROA (Profit)', value: Number(result?.intensity_scores?.profitability_intensity ?? result?.profitability_intensity ?? result?.profitability_score ?? 0), fill: '#10B981' },
+        { name: 'NPM (Profit)', value: Number(result?.intensity_scores?.profitability_intensity ?? result?.profitability_intensity ?? result?.profitability_score ?? 0), fill: '#F59E0B' },
+        { name: 'TAT (Efficiency)', value: Number(result?.intensity_scores?.efficiency_intensity ?? result?.efficiency_intensity ?? result?.efficiency_score ?? 0), fill: '#3B82F6' },
+        { name: 'Growth (Efficiency)', value: Number(result?.intensity_scores?.efficiency_intensity ?? result?.efficiency_intensity ?? result?.efficiency_score ?? 0), fill: '#EC4899' },
+    ];
 
     // Prepare data for Total Debt vs Total Equity Pie Chart
     const debtVsEquityData = result ? [
-        { name: 'Total Hutang', value: bersih(form.totalDebt) || Number(result.total_debt) || 1, fill: '#EF4444' },
-        { name: 'Total Ekuitas', value: bersih(form.totalEquity) || Number(result.total_equity) || 1, fill: '#3B82F6' }
+        { name: 'Total Hutang', value: Number(result.raw?.total_debt ?? result.total_debt) || 0, fill: '#EF4444' },
+        { name: 'Total Ekuitas', value: Number(result.raw?.total_equity ?? result.total_equity) || 0, fill: '#3B82F6' }
     ] : [];
 
 
@@ -356,15 +374,22 @@ export default function AnalisisAI() {
                 <div className="bg-[#2A1E4D] p-6 rounded-2xl shadow-xl border border-[#3A3A52]">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 pb-3 border-b border-[#3A3A52] gap-4">
                         <h3 className="text-lg font-bold text-white">Hasil Analisis & Visualisasi</h3>
-                        {/* Status Prediksi Card - Sejajar dengan Header */}
-                        {result && result.prediction && (
-                            <div className={`px-4 py-2 rounded-xl border flex items-center gap-3 ${PredictionBorder({ prediction: result.prediction })} bg-[#0E0B1D]`}>
-                                <div className={`p-1.5 rounded-lg ${PredictionBg({ prediction: result.prediction })}`}>
-                                    <PredictionIcon prediction={result.prediction} />
+                        {/* Status Prediksi Card - Dinamis dari API */}
+                        {result && (
+                            <div className={`px-4 py-2 rounded-xl border flex items-center gap-3 ${PredictionBorder({ prediction: getHealthStatus(avgScore) })} bg-[#0E0B1D]`}>
+                                <div className={`p-1.5 rounded-lg ${PredictionBg({ prediction: getHealthStatus(avgScore) })}`}>
+                                    <PredictionIcon prediction={getHealthStatus(avgScore)} />
                                 </div>
                                 <div>
                                     <p className="text-[10px] text-[#C9C2E3] uppercase font-semibold">Status</p>
-                                    <p className="text-xs font-black text-white">{result.ai_prediction || result.prediction} <span className="text-[#8B7CC7] font-semibold">({(result.confidence * 100).toFixed(1)}%)</span></p>
+                                    <p className="text-xs font-black text-white">
+                                        {getHealthStatus(avgScore)}
+                                        {typeof result.confidence === 'number' ? (
+                                            <span className="text-[#8B7CC7] font-semibold ml-1"> ({result.confidence.toFixed(1)}%)</span>
+                                        ) : (
+                                            <span className="text-[#8B7CC7] font-semibold ml-1"> ({avgScore.toFixed(1)}%)</span>
+                                        )}
+                                    </p>
                                 </div>
                             </div>
                         )}
@@ -384,30 +409,30 @@ export default function AnalisisAI() {
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div className="p-4 bg-[#0E0B1D] rounded-xl border border-[#3A3A52] text-center">
                                     <p className="text-xs text-[#C9C2E3] uppercase font-bold">Profitability</p>
-                                    <p className="text-2xl font-black text-white mt-1">{result.profitability_score}/100</p>
-                                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold mt-2 border ${getHealthColor(result.profitability_score)}`}>
-                                        {result.profitability_score >= 80 ? 'Sangat Baik' : result.profitability_score >= 60 ? 'Cukup' : 'Perlu Perbaikan'}
+                                    <p className="text-2xl font-black text-white mt-1">{scores.profitability}/100</p>
+                                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold mt-2 border ${getHealthColor(scores.profitability)}`}>
+                                        {scores.profitability >= 80 ? 'Sangat Baik' : scores.profitability >= 50 ? 'Perlu Perhatian' : 'Perlu Perbaikan'}
                                     </span>
                                 </div>
                                 <div className="p-4 bg-[#0E0B1D] rounded-xl border border-[#3A3A52] text-center">
                                     <p className="text-xs text-[#C9C2E3] uppercase font-bold">Liquidity</p>
-                                    <p className="text-2xl font-black text-white mt-1">{result.liquidity_score}/100</p>
-                                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold mt-2 border ${getHealthColor(result.liquidity_score)}`}>
-                                        {result.liquidity_score >= 80 ? 'Sangat Baik' : result.liquidity_score >= 60 ? 'Cukup' : 'Perlu Perbaikan'}
+                                    <p className="text-2xl font-black text-white mt-1">{scores.liquidity}/100</p>
+                                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold mt-2 border ${getHealthColor(scores.liquidity)}`}>
+                                        {scores.liquidity >= 80 ? 'Sangat Baik' : scores.liquidity >= 50 ? 'Perlu Perhatian' : 'Perlu Perbaikan'}
                                     </span>
                                 </div>
                                 <div className="p-4 bg-[#0E0B1D] rounded-xl border border-[#3A3A52] text-center">
                                     <p className="text-xs text-[#C9C2E3] uppercase font-bold">Leverage</p>
-                                    <p className="text-2xl font-black text-white mt-1">{result.leverage_score}/100</p>
-                                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold mt-2 border ${getHealthColor(result.leverage_score)}`}>
-                                        {result.leverage_score >= 80 ? 'Sangat Baik' : result.leverage_score >= 60 ? 'Cukup' : 'Perlu Perbaikan'}
+                                    <p className="text-2xl font-black text-white mt-1">{scores.leverage}/100</p>
+                                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold mt-2 border ${getHealthColor(scores.leverage)}`}>
+                                        {scores.leverage >= 80 ? 'Sangat Baik' : scores.leverage >= 50 ? 'Perlu Perhatian' : 'Perlu Perbaikan'}
                                     </span>
                                 </div>
                                 <div className="p-4 bg-[#0E0B1D] rounded-xl border border-[#3A3A52] text-center">
                                     <p className="text-xs text-[#C9C2E3] uppercase font-bold">Efficiency</p>
-                                    <p className="text-2xl font-black text-white mt-1">{result.efficiency_score}/100</p>
-                                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold mt-2 border ${getHealthColor(result.efficiency_score)}`}>
-                                        {result.efficiency_score >= 80 ? 'Sangat Baik' : result.efficiency_score >= 60 ? 'Cukup' : 'Perlu Perbaikan'}
+                                    <p className="text-2xl font-black text-white mt-1">{scores.efficiency}/100</p>
+                                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold mt-2 border ${getHealthColor(scores.efficiency)}`}>
+                                        {scores.efficiency >= 80 ? 'Sangat Baik' : scores.efficiency >= 50 ? 'Perlu Perhatian' : 'Perlu Perbaikan'}
                                     </span>
                                 </div>
                             </div>
@@ -435,10 +460,10 @@ export default function AnalisisAI() {
                                     <h4 className="text-xs font-bold text-[#C9C2E3] uppercase mb-3">Perbandingan Metrik Kesehatan</h4>
                                     <ResponsiveContainer width="100%" height="90%">
                                         <BarChart data={[
-                                            { name: 'Profitability', value: result.profitability_score },
-                                            { name: 'Liquidity', value: result.liquidity_score },
-                                            { name: 'Leverage', value: result.leverage_score },
-                                            { name: 'Efficiency', value: result.efficiency_score }
+                                            { name: 'Profitability', value: scores.profitability },
+                                            { name: 'Liquidity', value: scores.liquidity },
+                                            { name: 'Leverage', value: scores.leverage },
+                                            { name: 'Efficiency', value: scores.efficiency }
                                         ]}>
                                             <XAxis dataKey="name" stroke="#C9C2E3" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                                             <YAxis domain={[0, 100]} stroke="#C9C2E3" tick={{ fontSize: 11 }} />
@@ -478,10 +503,10 @@ export default function AnalisisAI() {
                                 {/* Intensity Score Bars */}
                                 <div className="space-y-3 mb-5">
                                     {[
-                                        { label: 'Liquidity Intensity (CR)', value: Number(result.intensity_scores?.liquidity_intensity ?? result.liquidity_intensity ?? result.liquidity_score ?? 0), color: '#8B7CC7' },
-                                        { label: 'Risk Intensity (DER)', value: Number(result.intensity_scores?.risk_intensity ?? result.risk_intensity ?? result.leverage_score ?? 0), color: '#EF4444' },
-                                        { label: 'Profitability Intensity (ROA+NPM)', value: Number(result.intensity_scores?.profitability_intensity ?? result.profitability_intensity ?? result.profitability_score ?? 0), color: '#10B981' },
-                                        { label: 'Efficiency Intensity (TAT+Growth)', value: Number(result.intensity_scores?.efficiency_intensity ?? result.efficiency_intensity ?? result.efficiency_score ?? 0), color: '#3B82F6' }
+                                        { label: 'Liquidity Intensity (CR)', value: Number(result.bar_chart?.cr ?? result.intensity_scores?.liquidity_intensity ?? result.liquidity_intensity ?? result.liquidity_score ?? 0), color: '#8B7CC7' },
+                                        { label: 'Risk Intensity (DER)', value: Number(result.bar_chart?.der ?? result.intensity_scores?.risk_intensity ?? result.risk_intensity ?? result.leverage_score ?? 0), color: '#EF4444' },
+                                        { label: 'Profitability Intensity (ROA+NPM)', value: Number(result.bar_chart?.roa ?? result.intensity_scores?.profitability_intensity ?? result.profitability_intensity ?? result.profitability_score ?? 0), color: '#10B981' },
+                                        { label: 'Efficiency Intensity (TAT+Growth)', value: Number(result.bar_chart?.tat ?? result.intensity_scores?.efficiency_intensity ?? result.efficiency_intensity ?? result.efficiency_score ?? 0), color: '#3B82F6' }
                                     ].map((item, idx) => (
                                         <div key={idx} className="bg-[#2A1E4D] rounded-xl p-3 border border-[#3A3A52]/50">
                                             <div className="flex justify-between text-xs mb-1">
@@ -519,8 +544,8 @@ export default function AnalisisAI() {
                                             {result.imbalance.map((diag, idx) => {
                                                 const isBalanced = diag.toLowerCase().includes('seimbang');
                                                 return (
-                                                    <span key={idx} className={`px-3 py-1.5 text-xs rounded-full font-medium ${isBalanced 
-                                                        ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-300' 
+                                                    <span key={idx} className={`px-3 py-1.5 text-xs rounded-full font-medium ${isBalanced
+                                                        ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-300'
                                                         : 'bg-rose-500/20 border border-rose-500/30 text-rose-300'
                                                     }`}>
                                                         {diag}

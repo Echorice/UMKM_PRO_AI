@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { InfoIcon, AlertTriangle } from 'lucide-react';
+import { InfoIcon, AlertTriangle, TrendingUp, TrendingDown, Minus, Activity, Zap, ArrowRightLeft } from 'lucide-react';
 
 export default function AnalisisAI() {
     const [form, setForm] = useState({
@@ -109,7 +109,6 @@ export default function AnalisisAI() {
         }
 
         const endpoint = simulationMode ? '/api/simulasi-kesehatan' : '/api/analisis-ml';
-        const targetState = simulationMode ? setSimResult : setResult;
 
         setLoading(true);
         try {
@@ -120,7 +119,14 @@ export default function AnalisisAI() {
             });
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
-            targetState(data);
+            if (simulationMode) {
+                setSimResult(data);
+                // Hasil simulasi langsung dirender di panel analisis tanpa reload,
+                // meskipun sebelumnya belum pernah menjalankan analisis biasa.
+                if (data?.simulation) setResult(data.simulation);
+            } else {
+                setResult(data);
+            }
         } catch (err) {
             console.error("Error:", err);
             alert(simulationMode ? "Terjadi kesalahan saat menjalankan simulasi" : "Terjadi kesalahan saat memproses prediksi ML");
@@ -157,11 +163,11 @@ export default function AnalisisAI() {
 
     const ratioHistogramData = result?.bar_chart ? [
         { name: 'CR (Liquidity)', value: Number(result.bar_chart.cr ?? 0), fill: '#8B7CC7' },
-        { name: 'DER (Risk)', value: Number(result.bar_chart.der ?? 0), fill: '#EF4444' },
-        { name: 'ROA (Profit)', value: Number(result.bar_chart.roa ?? 0), fill: '#10B981' },
-        { name: 'NPM (Profit)', value: Number(result.bar_chart.npm ?? 0), fill: '#F59E0B' },
-        { name: 'TAT (Efficiency)', value: Number(result.bar_chart.tat ?? 0), fill: '#3B82F6' },
-        { name: 'Growth (Efficiency)', value: Number(result.bar_chart.growth ?? 0), fill: '#EC4899' },
+        { name: 'DER (Risk)', value: Number(result.bar_chart.der ?? 0), fill: '#8B7CC7' },
+        { name: 'ROA (Profit)', value: Number(result.bar_chart.roa ?? 0), fill: '#8B7CC7' },
+        { name: 'NPM (Profit)', value: Number(result.bar_chart.npm ?? 0), fill: '#8B7CC7' },
+        { name: 'TAT (Efficiency)', value: Number(result.bar_chart.tat ?? 0), fill: '#8B7CC7' },
+        { name: 'Growth (Efficiency)', value: Number(result.bar_chart.growth ?? 0), fill: '#8B7CC7' },
     ] : [
         { name: 'CR (Liquidity)', value: Number(result?.intensity_scores?.liquidity_intensity ?? result?.liquidity_intensity ?? result?.liquidity_score ?? 0), fill: '#8B7CC7' },
         { name: 'DER (Risk)', value: Number(result?.intensity_scores?.risk_intensity ?? result?.risk_intensity ?? result?.leverage_score ?? 0), fill: '#EF4444' },
@@ -177,35 +183,72 @@ export default function AnalisisAI() {
         { name: 'Total Ekuitas', value: Number(result.raw?.total_equity ?? result.total_equity) || 0, fill: '#3B82F6' }
     ] : [];
 
+    // Delta Analysis mapping from simResult?.delta
+    // `better` = arah yang menguntungkan: 'up' berarti naik = membaik, 'down' berarti turun = membaik
+    const deltaData = React.useMemo(() => {
+        if (!simResult?.delta) return [];
+        const d = simResult.delta;
+        return [
+            { label: 'Current Ratio (CR)', key: 'current_ratio', factual: d.current_ratio?.before ?? 0, sim: d.current_ratio?.after ?? 0, decimals: 2, unit: '', better: 'up' },
+            { label: 'Debt to Equity (DER)', key: 'debt_equity_ratio', factual: d.debt_equity_ratio?.before ?? 0, sim: d.debt_equity_ratio?.after ?? 0, decimals: 2, unit: '', better: 'down' },
+            { label: 'Return on Assets (ROA)', key: 'return_on_assets', factual: d.return_on_assets?.before ?? 0, sim: d.return_on_assets?.after ?? 0, decimals: 2, unit: '%', better: 'up' },
+            { label: 'Net Profit Margin (NPM)', key: 'net_profit_margin', factual: d.net_profit_margin?.before ?? 0, sim: d.net_profit_margin?.after ?? 0, decimals: 2, unit: '%', better: 'up' },
+            { label: 'Asset Turnover (TAT)', key: 'total_asset_turnover', factual: d.total_asset_turnover?.before ?? 0, sim: d.total_asset_turnover?.after ?? 0, decimals: 2, unit: 'x', better: 'up' },
+            { label: 'Revenue Growth', key: 'revenue_growth', factual: d.revenue_growth?.before ?? 0, sim: d.revenue_growth?.after ?? 0, decimals: 2, unit: '%', better: 'up' },
+        ];
+    }, [simResult]);
+
 
     const renderDelta = (d) => {
-        const delta = d.sim - d.factual;
-        const deltaAbs = Math.abs(delta);
-        const fmtDelta = deltaAbs.toFixed(d.decimals || 0);
-        const sign = delta > 0 ? '+' : delta < 0 ? '' : '±';
-        const deltaStr = `${sign}${fmtDelta}${d.unit}`;
-        const isPositive = delta > 0;
-        const statusColor = isPositive ? 'text-emerald-400' : delta < 0 ? 'text-rose-400' : 'text-amber-400';
-        const statusText = isPositive ? 'Membaik' : delta < 0 ? 'Memburuk' : 'Stabil';
+        const selisih = d.sim - d.factual;
+        const isNeutral = Math.abs(selisih) < 1e-9;
+        const arahNaik = selisih > 0;
+        // Rasio seperti DER membaik saat turun (better: 'down')
+        const membaik = !isNeutral && (d.better === 'down' ? !arahNaik : arahNaik);
+        const tone = isNeutral
+            ? { text: 'text-amber-300', border: 'border-amber-500/40', grad: 'from-amber-500/10', bar: 'bg-amber-400', label: 'Stabil' }
+            : membaik
+                ? { text: 'text-emerald-300', border: 'border-emerald-500/40', grad: 'from-emerald-500/10', bar: 'bg-emerald-400', label: 'Membaik' }
+                : { text: 'text-rose-300', border: 'border-rose-500/40', grad: 'from-rose-500/10', bar: 'bg-rose-400', label: 'Memburuk' };
+        const SelisihIcon = isNeutral ? Minus : arahNaik ? TrendingUp : TrendingDown;
+        const fmt = (v) => Number(v || 0).toFixed(d.decimals || 0);
+        const sign = isNeutral ? '±' : arahNaik ? '+' : '−';
+        const selisihStr = `${sign}${Math.abs(selisih).toFixed(d.decimals || 0)}${d.unit}`;
+        // Skala bar relatif agar perbandingan faktual vs simulasi terbaca
+        const maxVal = Math.max(Math.abs(d.factual), Math.abs(d.sim), 1e-9);
+        const wFactual = Math.max(4, (Math.abs(d.factual) / maxVal) * 100);
+        const wSim = Math.max(4, (Math.abs(d.sim) / maxVal) * 100);
+
         return (
-            <div key={d.label} className="bg-[#0E0B1D] rounded-xl border border-[#3A3A52] p-4">
-                <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-bold text-[#C9C2E3] uppercase">{d.label}</span>
-                    <span className={`text-xs font-bold ${statusColor}`}>{statusText}</span>
+            <div key={d.label} className={`relative overflow-hidden bg-gradient-to-br ${tone.grad} via-[#0E0B1D] to-[#0E0B1D] rounded-xl border ${tone.border} p-4 transition-all duration-300 hover:scale-[1.02] hover:shadow-lg`}>
+                <div className="flex justify-between items-start gap-2 mb-3">
+                    <span className="text-xs font-bold text-[#C9C2E3] uppercase leading-tight">{d.label}</span>
+                    <span className={`inline-flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${tone.text} bg-white/5 border ${tone.border}`}>
+                        <SelisihIcon className="w-3 h-3" aria-hidden="true" />
+                        {tone.label}
+                    </span>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-center text-[11px] text-[#C9C2E3]">
-                    <div>
-                        <p className="text-white font-semibold">{d.factual.toFixed(d.decimals || 0)}{d.unit}</p>
-                        <p className="text-[10px]">Faktual</p>
+
+                <div className="space-y-1.5 mb-3">
+                    <div className="flex items-center gap-2">
+                        <span className="w-14 shrink-0 text-[10px] text-[#C9C2E3]/70">Faktual</span>
+                        <div className="flex-1 h-1.5 bg-[#0E0B1D] rounded-full overflow-hidden">
+                            <div className="h-full rounded-full bg-[#8B7CC7] transition-all duration-500" style={{ width: `${wFactual}%` }} />
+                        </div>
+                        <span className="w-16 shrink-0 text-right text-[11px] font-semibold text-white">{fmt(d.factual)}{d.unit}</span>
                     </div>
-                    <div className="relative">
-                        <p className="text-white font-semibold">{d.sim.toFixed(d.decimals || 0)}{d.unit}</p>
-                        <p className="text-[10px]">Simulasi</p>
+                    <div className="flex items-center gap-2">
+                        <span className="w-14 shrink-0 text-[10px] text-[#C9C2E3]/70">Simulasi</span>
+                        <div className="flex-1 h-1.5 bg-[#0E0B1D] rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${tone.bar} transition-all duration-500`} style={{ width: `${wSim}%` }} />
+                        </div>
+                        <span className="w-16 shrink-0 text-right text-[11px] font-semibold text-white">{fmt(d.sim)}{d.unit}</span>
                     </div>
-                    <div>
-                        <p className={`text-white font-bold ${statusColor}`}>{deltaStr}</p>
-                        <p className="text-[10px]">Delta</p>
-                    </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                    <span className="text-[10px] uppercase tracking-wide text-[#C9C2E3]/60">Selisih</span>
+                    <span className={`text-sm font-black ${tone.text}`}>{selisihStr}</span>
                 </div>
             </div>
         );
@@ -581,13 +624,18 @@ export default function AnalisisAI() {
                             )}
 
                             {/* Delta Analysis */}
-                            {simulationMode && simResult && result && deltaData.length > 0 && (
-                                <div className="p-5 bg-gradient-to-r from-emerald-950/40 to-purple-950/40 rounded-xl border border-emerald-500/30">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <span className="text-xl">📊</span>
-                                        <h4 className="text-sm font-bold text-emerald-300 uppercase tracking-wide">Delta Analysis: Faktual vs Simulasi</h4>
+                            {simulationMode && simResult && deltaData.length > 0 && (
+                                <div className="p-5 bg-gradient-to-r from-emerald-950/40 via-indigo-950/40 to-purple-950/40 rounded-2xl border border-emerald-500/30 shadow-2xl backdrop-blur-md">
+                                    <div className="flex items-center gap-3 mb-4 pb-3 border-b border-white/10">
+                                        <div className="p-2 bg-emerald-500/20 rounded-xl border border-emerald-500/30 text-emerald-400">
+                                            <Activity className="w-6 h-6 animate-pulse" />
+                                        </div>
+                                        <div>
+                                            <h4 className="text-base font-black text-emerald-300 uppercase tracking-wider">Delta Analysis: Faktual vs Simulasi</h4>
+                                            <p className="text-xs text-[#C9C2E3]">Perbandingan metrik performa keuangan aktual terhadap skenario simulasi secara real-time</p>
+                                        </div>
                                     </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                         {deltaData.map(renderDelta)}
                                     </div>
                                 </div>
